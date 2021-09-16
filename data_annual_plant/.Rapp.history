@@ -1,0 +1,202 @@
+generate_assemblages <- function(n, labels=letters)#
+{#
+  df = expand.grid(replicate(n, 0:1, simplify = FALSE))#
+  names(df) = labels[1:n]#
+  x_star = as.data.frame(matrix(data=0,nrow=nrow(df),ncol=ncol(df)))#
+  names(x_star) = paste(names(df),"star",sep=".")#
+  df_final = data.frame(df, #
+                        stable=NA, #
+                        feasible=NA,#
+                        richness=NA,#
+                        x_star)#
+  return(df_final)#
+}
+params_vital = read.csv('speciesvitalrates.csv')
+str(params_vital)
+params_alpha = read.csv('alpha_estimates_row_is_target.csv')
+params_alpha
+names(params_alpha)
+params_vital$species
+library(dplyr)#
+library(tidyr)
+select(-species)
+params_vital = read.csv('speciesvitalrates.csv') %>% #
+					select(-species)
+params_vital
+select(-1)
+select(-X)
+params_alpha = read.csv('alpha_estimates_row_is_target.csv') %>%#
+					select(-X)
+str(params_alpha)
+params_alpha = read.csv('alpha_estimates_row_is_target.csv') %>%#
+					select(-X) %>%#
+					as.matrix
+params_alpha
+params_vital = read.csv('speciesvitalrates.csv') %>% #
+					select(-species)#
+params_alpha = read.csv('alpha_estimates_row_is_target.csv') %>%#
+					select(-X) %>%#
+					as.matrix#
+#
+# we assume the row and column orders are the same#
+params = list(vital=params_vital, alpha=params_alpha)
+# make assemblages#
+generate_assemblages <- function(n, labels=letters)#
+{#
+  df = expand.grid(replicate(n, 0:1, simplify = FALSE))#
+  names(df) = labels[1:n]#
+  x_star = as.data.frame(matrix(data=0,nrow=nrow(df),ncol=ncol(df)))#
+  names(x_star) = paste(names(df),"star",sep=".")#
+  df_final = data.frame(df, #
+                        stable=NA, #
+                        feasible=NA,#
+                        richness=NA,#
+                        x_star)#
+  return(df_final)#
+}#
+assign_params <- function(assemblage, params)#
+{#
+  stopifnot(nrow(assemblage)==1)#
+  # find species that are present#
+  species_indices_present = which(as.numeric(assemblage)==1)#
+  # pick subset of parameters (assuming that the parameters don't change when subsetting)#
+  vital_this = params$vital[species_indices_present, drop=FALSE]#
+  alpha_this = params$alpha[species_indices_present, species_indices_present, drop=FALSE]#
+  return(list(vital= vital_this,alpha= alpha_this))#
+}#
+fill_in_assemblages <- function(assemblages, params)#
+{#
+  n = log2(nrow(assemblages))#
+  for (i in 1:nrow(assemblages)) # skip the no-species scenario#
+  {#
+    message(i/nrow(assemblages))#
+    params_this_row = assign_params(assemblage = assemblages[i,1:n], params = params)#
+    #x_star = determine_fixed_point(params_this_row)#
+    #assemblages[i,"stable"] = determine_stability(params_this_row)#
+    #assemblages[i,"feasible"] = determine_feasibility(params_this_row)#
+    if (!is.null(x_star))#
+    {#
+      #assemblages[i,names(x_star)] = x_star#
+    }#
+    #assemblages[i,"richness"] = sum(x_star > 0.01)#
+  }#
+  return(assemblages)#
+}#
+#
+assemblages_godoy = generate_assemblages(n = nrow(params_vital))
+assemblages_godoy
+nrow(assemblages_godoy)
+nrow(params_vital)
+params_vital
+write.csv(assemblages_godoy_18,file='assemblages_godoy_18.csv',row.names=FALSE)
+assemblages_godoy = fill_in_assemblages(params = params_M_11, assemblages = assemblages_godoy)#
+write.csv(assemblages_godoy_18,file='assemblages_godoy_18.csv',row.names=FALSE)
+params_godoy = list(vital=params_vital, alpha=params_alpha)
+assemblages_godoy = fill_in_assemblages(params = params_godoy, assemblages = assemblages_godoy)
+fill_in_assemblages <- function(assemblages, params)#
+{#
+  n = log2(nrow(assemblages))#
+  for (i in 1:nrow(assemblages)) # skip the no-species scenario#
+  {#
+    message(i/nrow(assemblages))#
+    params_this_row = assign_params(assemblage = assemblages[i,1:n], params = params)#
+    #x_star = determine_fixed_point(params_this_row)#
+    #assemblages[i,"stable"] = determine_stability(params_this_row)#
+    #assemblages[i,"feasible"] = determine_feasibility(params_this_row)#
+    if (!is.null(x_star))#
+    {#
+      #assemblages[i,names(x_star)] = x_star#
+    }#
+    #assemblages[i,"richness"] = sum(x_star > 0.01)#
+  }#
+  return(assemblages)#
+}
+assemblages_godoy = fill_in_assemblages(params = params_godoy, assemblages = assemblages_godoy)
+traceback()
+fill_in_assemblages <- function(assemblages, params)#
+{#
+  n = log2(nrow(assemblages))#
+  for (i in 1:nrow(assemblages)) # skip the no-species scenario#
+  {#
+    message(i/nrow(assemblages))#
+    params_this_row = assign_params(assemblage = assemblages[i,1:n], params = params)#
+    #x_star = determine_fixed_point(params_this_row)#
+    #assemblages[i,"stable"] = determine_stability(params_this_row)#
+    #assemblages[i,"feasible"] = determine_feasibility(params_this_row)#
+    #if (!is.null(x_star))#
+    {#
+      #assemblages[i,names(x_star)] = x_star#
+    }#
+    #assemblages[i,"richness"] = sum(x_star > 0.01)#
+  }#
+  return(assemblages)#
+}
+assemblages_godoy = fill_in_assemblages(params = params_godoy, assemblages = assemblages_godoy)
+traceback()
+params$vital
+assign_params <- function(assemblage, params)#
+{#
+  stopifnot(nrow(assemblage)==1)#
+  # find species that are present#
+  species_indices_present = which(as.numeric(assemblage)==1)#
+  print(species_indices_present)#
+  # pick subset of parameters (assuming that the parameters don't change when subsetting)#
+  vital_this = params$vital[species_indices_present, drop=FALSE]#
+  alpha_this = params$alpha[species_indices_present, species_indices_present, drop=FALSE]#
+  return(list(vital= vital_this,alpha= alpha_this))#
+}
+fill_in_assemblages <- function(assemblages, params)#
+{#
+  n = log2(nrow(assemblages))#
+  for (i in 1:nrow(assemblages)) # skip the no-species scenario#
+  {#
+    message(i/nrow(assemblages))#
+    params_this_row = assign_params(assemblage = assemblages[i,1:n], params = params)#
+    #x_star = determine_fixed_point(params_this_row)#
+    #assemblages[i,"stable"] = determine_stability(params_this_row)#
+    #assemblages[i,"feasible"] = determine_feasibility(params_this_row)#
+    #if (!is.null(x_star))#
+    {#
+      #assemblages[i,names(x_star)] = x_star#
+    }#
+    #assemblages[i,"richness"] = sum(x_star > 0.01)#
+  }#
+  return(assemblages)#
+}
+assemblages_godoy = fill_in_assemblages(params = params_godoy, assemblages = assemblages_godoy)
+params_godoy$vital[4,]
+params_godoy$vital[4,drop=FALSE]
+params_godoy$vital[4,,drop=FALSE]
+assign_params <- function(assemblage, params)#
+{#
+  stopifnot(nrow(assemblage)==1)#
+  # find species that are present#
+  species_indices_present = which(as.numeric(assemblage)==1)#
+  print(species_indices_present)#
+  # pick subset of parameters (assuming that the parameters don't change when subsetting)#
+  vital_this = params$vital[species_indices_present, , drop=FALSE]#
+  alpha_this = params$alpha[species_indices_present, species_indices_present, drop=FALSE]#
+  return(list(vital= vital_this,alpha= alpha_this))#
+}
+fill_in_assemblages <- function(assemblages, params)#
+{#
+  n = log2(nrow(assemblages))#
+  for (i in 1:nrow(assemblages)) # skip the no-species scenario#
+  {#
+    message(i/nrow(assemblages))#
+    params_this_row = assign_params(assemblage = assemblages[i,1:n], params = params)#
+    #x_star = determine_fixed_point(params_this_row)#
+    #assemblages[i,"stable"] = determine_stability(params_this_row)#
+    #assemblages[i,"feasible"] = determine_feasibility(params_this_row)#
+    #if (!is.null(x_star))#
+    {#
+      #assemblages[i,names(x_star)] = x_star#
+    }#
+    #assemblages[i,"richness"] = sum(x_star > 0.01)#
+  }#
+  return(assemblages)#
+}#
+#
+assemblages_godoy = generate_assemblages(n = nrow(params_vital))#
+#
+assemblages_godoy = fill_in_assemblages(params = params_godoy, assemblages = assemblages_godoy)

@@ -184,12 +184,12 @@ fill_in_assemblages <- function(assemblages, params)
 
 
 set.seed(1) # replicability
-nsp_glv_10 <- 10
-params_glv_10 = generate_params(n = nsp_glv_10, A.norm.mean = -0.6, r.norm.mean = 1.7)
-assemblages_glv_10 = fill_in_assemblages(params = params_glv_10, assemblages = generate_assemblages(n = nsp_glv_10))
-write.csv(assemblages_glv_10,file='assemblages_glv_10.csv',row.names=FALSE)
-
-
+nsp_glv_16 <- 16
+params_glv_16 = generate_params(n = nsp_glv_16, A.norm.mean = -0.2, r.norm.mean = 1.5)
+assemblages_glv_16 = fill_in_assemblages(params = params_glv_16, assemblages = generate_assemblages(n = nsp_glv_16))
+write.csv(assemblages_glv_16,file='assemblages_glv_16.csv',row.names=FALSE)
+# check counts
+assemblages_glv_16 %>% select(richness, stable) %>% table
 
 
 
