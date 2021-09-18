@@ -69,7 +69,7 @@ do_simulation_annual_plant <- function(vital, alpha, nstep=200)
         {
           term2 = term2 + alpha[i,j]*vital$g[j]*n[t,j]
         }
-        fec[i] = vital$lambda[i] / ( 1 + alpha[i,i]*vital$g[i]*n[t,i] + term2  )
+        fec[i] = vital$lambda[i] / ( 1 + term2  )
         n[t+1,i] = n[t,i] * ( (1 - vital$g[i])*vital$s[i] + vital$g[i]*fec[i] )
       }
     }

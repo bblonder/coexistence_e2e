@@ -7,6 +7,14 @@ library(randomForestSRC)
 library(parallel)
 library(data.table)
 
+# KEY SETUP
+dir.create("outputs_statistical")
+CORES = 8 # number of cores to parallel process on
+REPLICATES = 5
+GRID_POINTS = 20
+# END
+
+
 freq_weight <- function(x)
 {
   x_cut = cut(x, breaks=10)
@@ -21,7 +29,7 @@ freq_weight <- function(x)
   return(weights_by_x)
 }
 
-predict_rf <- function(yvar, assemblages, rows_train, method, num_species=log2(nrow(assemblages)))
+predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
 {
   print(yvar) # DEBUG
   
@@ -104,8 +112,11 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species=log2(n
       
       balanced_accuracy = confusion$byClass["Balanced Accuracy"]
       
+      results = data.frame(pred = as.numeric(as.matrix(values_predicted)), obs = as.numeric(as.matrix(values_observed)))
+      
+      
       return(list(model=m_rf_multivar,
-                  pred=values_predicted, 
+                  pred=values_predicted,
                   obs=values_observed,
                   ba=balanced_accuracy))
     }
@@ -113,14 +124,24 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species=log2(n
     {
       results = data.frame(pred = as.numeric(as.matrix(values_predicted)), obs = as.numeric(as.matrix(values_observed)))
       message('across whole dataset not individual cases')
-      m_lm = lm(pred~obs,data=results)
-
-      intercept = coef(m_lm)[1]
-      slope = coef(m_lm)[2]
-      r2 = summary(m_lm)$r.squared
+      m_lm = NULL
+      try(m_lm <- lm(pred~obs,data=results))
+      if (!is.null(m_lm))
+      {
+        intercept = coef(m_lm)[1]
+        slope = coef(m_lm)[2]
+        r2 = summary(m_lm)$r.squared
+      }
+      else
+      {
+        intercept = NA
+        slope = NA
+        r2 = NA
+      }
       
       final_result = list(model=m_rf_multivar,
-                          df=results,
+                          pred=values_predicted,
+                          obs=values_observed,
                           intercept=intercept,
                           slope=slope,
                           r2=r2)
@@ -179,19 +200,30 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species=log2(n
       balanced_accuracy = confusion$byClass["Balanced Accuracy"]
       
       return(list(model=m_rf_1var,
-                  df=results,
+                  pred=values_predicted,
+                  obs=values_observed,
                   cm=confusion,
                   ba=balanced_accuracy))
     }
     else
     {
-      m_lm = lm(pred~obs,data=results)
-      
-      intercept = coef(m_lm)[1]
-      slope = coef(m_lm)[2]
-      r2 = summary(m_lm)$r.squared
+      m_lm = NULL
+      try(m_lm <- lm(pred~obs,data=results))
+      if (!is.null(m_lm))
+      {
+        intercept = coef(m_lm)[1]
+        slope = coef(m_lm)[2]
+        r2 = summary(m_lm)$r.squared
+      }
+      else
+      {
+        intercept = NA
+        slope = NA
+        r2 = NA
+      }
       return(list(model=m_rf_1var,
-                  df=results,
+                  pred=values_predicted,
+                  obs=values_observed,
                   intercept=intercept,
                   slope=slope,
                   r2=r2))
@@ -199,24 +231,34 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species=log2(n
   }
 }
 
+lseq <- function(from, to, length.out) {
+  # logarithmic spaced sequence
+  # blatantly stolen from library("emdbook"), because need only this
+  exp(seq(log(from), log(to), length.out = length.out))
+}
+
 do_predictions <- function(input_file,fn,
                            num_species, 
                            num_replicates_in_data = 1, 
-                           dataset_complete, 
-                           num_replicates_in_rf=5)
+                           num_replicates_in_rf=REPLICATES,
+                           num_grid_points=GRID_POINTS)
 {
   data = input_file %>%
     mutate(feasible.and.stable = factor(stable & feasible))
   
+  # determine if we have all the possible cases
+  dataset_complete = (num_replicates_in_data * 2^num_species == nrow(input_file))
+  
+  seq_all = lseq(1e-6,1,length.out=num_grid_points)
+  
   if(dataset_complete==TRUE)
   {
-    frac_this = c(0.001,0.01,0.1,0.5,0.9)
+    frac_this = seq_all
   }
   else
   {
     num_cases_this = nrow(input_file)
-    num_cases_total_this = 2^num_species * num_replicates_in_data
-    frac_this = seq(1, num_cases_this, length.out=5) / num_cases_total_this
+    frac_this = seq_all[which(seq_all <= num_cases_this/(num_replicates_in_data * 2^num_species) )]
   }
   
   results_table = expand.grid(rep=1:num_replicates_in_rf, 
@@ -232,54 +274,80 @@ do_predictions <- function(input_file,fn,
   {
     print(cbind(file=fn, i=i, frac=i/nrow(results_table), results_table[i,])) #DEBUG
     
-    rows_train = sample(x=1:nrow(data), size=ceiling(nrow(data)*results_table$frac[i]))
+    n_train = ceiling(nrow(data)*results_table$frac[i])
     
-    prediction_abundance = predict_rf(yvar = "_abundance",
-                                      assemblages = data,
-                                      rows_train = rows_train,
-                                      method = results_table$method[i],
-                                      num_species=num_species)
-    results_table$abundance.r2[i]=prediction_abundance$r2
-    print(results_table[i,,drop=FALSE]) # DEBUG
-    
-    prediction_composition = predict_rf(yvar = "_composition",
+    if (n_train == nrow(data))
+    {
+      print('all points in training, no points, skipping')
+      return(NULL)
+    }
+    else
+    {
+      rows_train = sample(x=1:nrow(data), size=n_train)
+      
+      print(rows_train)
+      
+      prediction_abundance = predict_rf(yvar = "_abundance",
                                         assemblages = data,
                                         rows_train = rows_train,
                                         method = results_table$method[i],
                                         num_species=num_species)
-    results_table$composition.balanced_accuracy[i]=prediction_composition$ba
-    print(results_table[i,,drop=FALSE]) # DEBUG
-    
-    prediction_richness = predict_rf(yvar = 'richness',
-                                     assemblages = data,
-                                     rows_train = rows_train,
-                                     method = results_table$method[i],
-                                     num_species=num_species)
-    results_table$richness.r2[i]=prediction_richness$r2
-    print(results_table[i,,drop=FALSE]) # DEBUG
-    
-    prediction_fs = predict_rf(yvar = 'feasible.and.stable',
-                               assemblages = data,
-                               rows_train = rows_train,
-                               method = results_table$method[i],
-                               num_species=num_species)
-    results_table$feasible.and.stable.balanced_accuracy[i]=prediction_fs$ba
-    print(results_table[i,,drop=FALSE]) # DEBUG
-    
-    
-
-    
-    
-    
-    
-    
-
-    #write.csv(results_table[i,,drop=FALSE],file=sprintf('temp_%s_%d.csv',fn,i),row.names=FALSE) # DEBUG
-    
-    return(results_table[i,,drop=FALSE])
-  }, mc.cores=2) # DEBUG
+      results_table$abundance.r2[i]=prediction_abundance$r2
+      write.csv(prediction_abundance$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_abundance_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
+      write.csv(prediction_abundance$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_abundance_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
+         
+      #print(results_table[i,,drop=FALSE]) # DEBUG
+      
+      prediction_composition = predict_rf(yvar = "_composition",
+                                          assemblages = data,
+                                          rows_train = rows_train,
+                                          method = results_table$method[i],
+                                          num_species=num_species)
+      results_table$composition.balanced_accuracy[i]=prediction_composition$ba
+      write.csv(prediction_composition$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_composition_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
+      write.csv(prediction_composition$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_composition_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
+      
+      #print(results_table[i,,drop=FALSE]) # DEBUG
+      
+      prediction_richness = predict_rf(yvar = 'richness',
+                                       assemblages = data,
+                                       rows_train = rows_train,
+                                       method = results_table$method[i],
+                                       num_species=num_species)
+      results_table$richness.r2[i]=prediction_richness$r2
+      write.csv(prediction_richness$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_richness_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
+      write.csv(prediction_richness$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_richness_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
+      
+      #print(results_table[i,,drop=FALSE]) # DEBUG
+      
+      prediction_fs = predict_rf(yvar = 'feasible.and.stable',
+                                 assemblages = data,
+                                 rows_train = rows_train,
+                                 method = results_table$method[i],
+                                 num_species=num_species)
+      results_table$feasible.and.stable.balanced_accuracy[i]=prediction_fs$ba
+      write.csv(prediction_fs$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_fs_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
+      write.csv(prediction_fs$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_fs_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
+      
+      #print(results_table[i,,drop=FALSE]) # DEBUG
+      
+      
   
-  #saveRDS(results_list, file=sprintf('results_%s.Rdata',fn)) #DEBUG
+      
+      results_table$num_species = num_species
+      results_table$num_replicates_in_data = num_replicates_in_data
+      results_table$num_cases = nrow(data)
+      
+      
+      
+  
+      #write.csv(results_table[i,,drop=FALSE],file=sprintf('temp_%s_%d.csv',fn,i),row.names=FALSE) # DEBUG
+      
+      return(results_table[i,,drop=FALSE])
+    }
+  }, mc.cores=CORES) # DEBUG
+  
+  #saveRDS(results_list, file=sprintf('temp_results_%s.Rdata',fn)) #DEBUG
   results_df = rbindlist(results_list)
   
   
@@ -301,39 +369,39 @@ do_predictions <- function(input_file,fn,
 # do analyses
 data_assemblages_cedar_creek_18 = read.csv('data_cedar_creek/cedar_creek_2018.csv')
 do_predictions(data_assemblages_cedar_creek_18,
-               fn = 'cedar_creek_n=18',
+               fn = 'cedar_creek',
                num_species = 18,
-               dataset_complete = FALSE)
+               num_replicates_in_data = 1)
 
 data_sortie_9_3 = read.csv('data_sortie/data_sortie.csv')
 do_predictions(data_sortie_9_3,
-               fn = 'sortie_n=9_3',
+               fn = 'sortie',
                num_species = 9,
-               dataset_complete = TRUE)
+               num_replicates_in_data = 3)
 
 data_assemblages_H_12 = read.csv('data_glv/assemblages_H_12.csv')
 do_predictions(data_assemblages_H_12,
-               'glv_human_n=12',
+               'glv_human',
                num_species = 12,
-               dataset_complete = TRUE)
+               num_replicates_in_data = 1)
 
 data_assemblages_M_11 = read.csv('data_glv/assemblages_M_11.csv')
 do_predictions(data_assemblages_M_11,
-               fn = 'glv_mouse_n=11',
+               fn = 'glv_mouse',
                num_species = 11,
-               dataset_complete = TRUE)
+               num_replicates_in_data = 1)
 
 data_assemblages_glv_16 = read.csv('data_glv/assemblages_glv_16.csv')
 data_assemblages_glv_16 = data_assemblages_glv_16 %>% sample_n(2^14)
 do_predictions(data_assemblages_glv_16,
-                fn = 'glv_simulated_n=16',
-                num_species = 16, 
-                dataset_complete = FALSE)
+               fn = 'glv_simulated',
+               num_species = 16,
+               num_replicates_in_data = 1)
 
 data_annual_plant_18 = read.csv('data_annual_plant/assemblages_annual_plant_18.csv') %>%
-  mutate(stable=replace(stable, is.na(stable), 1)) # as there are missing cases
+  mutate(stable=replace(stable, is.na(stable), 1)) # as there is one missing case (the all zeros case)
 data_annual_plant_18 = data_annual_plant_18 %>% sample_n(2^14)
 do_predictions(data_annual_plant_18,
-               fn = 'annual_plant_n=18',
+               fn = 'annual_plant',
                num_species = 18, 
-               dataset_complete = FALSE) # DEBUG
+               num_replicates_in_data = 1)
