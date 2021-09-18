@@ -43,8 +43,8 @@ make_plot <- function(yvar,xlab,ylab)
     ylim(0,1) +
     scale_x_log10() +
     stat_summary(fun=mean, geom="line") +     
-    ylab(xlab) +
-    xlab(ylab) +
+    xlab(xlab) +
+    ylab(ylab) +
     theme(legend.position='bottom') +
     scale_color_manual(values=wes_palette("Darjeeling1")) +
     #geom_vline(mapping=aes(xintercept = x.cutoff), data=df_all_cutoff) +
