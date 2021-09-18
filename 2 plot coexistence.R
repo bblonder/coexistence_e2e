@@ -14,17 +14,22 @@ df_all = rbindlist(lapply(1:length(fn_outputs), function(i)
 {
   df_this = read.csv(fn_outputs[i])
   
-  dataset_this = gsub("\\.csv","",gsub("results_","",basename(fn_outputs[i])))
+  name_this = gsub("\\.csv","",gsub("results_","",basename(fn_outputs[i])))
   
-  df_this$dataset = sprintf("%s (%d total states)",dataset_this, 2^df_this$num_species[1] * df_this$num_replicates_in_data[1])
+  df_this$dataset_short = name_this
+  
+  df_this$dataset = sprintf("%s (%d total states)",name_this, 2^df_this$num_species[1] * df_this$num_replicates_in_data[1])
   
   return(df_this)
 }))
 
-df_all_cutoff = df_all %>% 
-  select(dataset,num_species, num_replicates_in_data, num_cases) %>%
-  mutate(x.cutoff = 500 / (2^num_species * num_replicates_in_data)) %>%
-  unique
+df_all_stats = df_all %>% 
+  select(dataset_short,num_species, num_replicates_in_data, num_cases) %>%
+  #mutate(x.cutoff = 500 / (2^num_species * num_replicates_in_data)) %>%
+  unique %>%
+  arrange(num_species) %>%
+  mutate(stochastic=dataset_short %in% c("sortie")) %>%
+  mutate(empirical=dataset_short %in% c("cedar_creek"))
  
 make_plot <- function(yvar,xlab,ylab)
 {
@@ -127,7 +132,6 @@ plot_obs_pred_scatter <- function(obs, pred, frac)
 
 data_abund_annual_0.001_obs = read.csv('outputs_statistical/table_fn=annual_plant_i=153_method=naive_rep=3_frac=0.001438_abundance_obs.csv')
 data_abund_annual_0.001_pred = read.csv('outputs_statistical/table_fn=annual_plant_i=153_method=naive_rep=3_frac=0.001438_abundance_pred.csv')
-
 
 data_abund_annual_0.01_obs = read.csv('outputs_statistical/table_fn=annual_plant_i=208_method=e2e_rep=3_frac=0.012743_abundance_obs.csv')
 data_abund_annual_0.01_pred = read.csv('outputs_statistical/table_fn=annual_plant_i=208_method=e2e_rep=3_frac=0.012743_abundance_pred.csv')
