@@ -30,6 +30,9 @@ df_all_stats = df_all %>%
   arrange(num_species) %>%
   mutate(stochastic=dataset_short %in% c("sortie")) %>%
   mutate(empirical=dataset_short %in% c("cedar_creek"))
+
+write.csv(df_all_stats,'outputs_figures/table_dataset_stats.csv',row.names=F)
+
  
 make_plot <- function(yvar,xlab,ylab)
 {
