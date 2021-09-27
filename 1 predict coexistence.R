@@ -10,7 +10,7 @@ library(data.table)
 # KEY SETUP
 dir.create("outputs_statistical")
 CORES = 8 # number of cores to parallel process on
-REPLICATES = 5
+REPLICATES = 3
 GRID_POINTS = 20
 # END
 
@@ -267,84 +267,111 @@ do_predictions <- function(input_file,fn,
                               richness.r2=NA,
                               feasible.and.stable.balanced_accuracy=NA,
                               composition.balanced_accuracy=NA,
-                              abundance.r2=NA
+                              abundance.r2=NA,
+                              sampling_strategy=c("high-1","high-2","high-3",
+                                                  "low-1","low-2","low-3",
+                                                  "mixed")
   )
   
   results_list = mclapply(1:nrow(results_table), function(i) # DEBUG #lapply(1:nrow(results_table), function(i)#
   {
     print(cbind(file=fn, i=i, frac=i/nrow(results_table), results_table[i,])) #DEBUG
-    
-    n_train = ceiling(nrow(data)*results_table$frac[i])
-    
-    if (n_train == nrow(data))
+
+    if (results_table$sampling_strategy[i]=="mixed")
     {
-      print('all points in training, no points, skipping')
-      return(NULL)
+      n_train = ceiling(nrow(data)*results_table$frac[i])
+      
+      if (n_train == nrow(data))
+      {
+        print('all points in training, no points, skipping')
+        return(NULL)
+      }
+      else
+      {
+        rows_train = sample(x=1:nrow(data), size=n_train)
+      }
     }
-    else
+    else if (results_table$sampling_strategy[i] %in% c("low-1","low-2","low-3"))
     {
-      rows_train = sample(x=1:nrow(data), size=n_train)
+      max_richness = as.numeric(gsub("low-","",as.character(results_table$sampling_strategy[i]),fixed=TRUE))
+      initial_richness = apply(data[,1:num_species],1,sum)
       
-      print(rows_train)
+      which_rows = which(initial_richness <= max_richness)
       
-      prediction_abundance = predict_rf(yvar = "_abundance",
+      n_train = ceiling(length(which_rows)*results_table$frac[i])
+      
+      rows_train = sample(x=which_rows, size=n_train)
+    }
+    else if (results_table$sampling_strategy[i] %in% c("high-1","high-2","high-3"))
+    {
+      min_richness = num_species - as.numeric(gsub("high-","",as.character(results_table$sampling_strategy[i]),fixed=TRUE))
+      initial_richness = apply(data[,1:num_species],1,sum)
+      
+      which_rows = which(initial_richness >= min_richness)
+      
+      n_train = ceiling(length(which_rows)*results_table$frac[i])
+      
+      rows_train = sample(x=which_rows, size=n_train)
+    }
+    #print(rows_train) # DEBUG
+    
+    prediction_abundance = predict_rf(yvar = "_abundance",
+                                      assemblages = data,
+                                      rows_train = rows_train,
+                                      method = results_table$method[i],
+                                      num_species=num_species)
+    results_table$abundance.r2[i]=prediction_abundance$r2
+    write.csv(prediction_abundance$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_abundance_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+    write.csv(prediction_abundance$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_abundance_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+       
+    #print(results_table[i,,drop=FALSE]) # DEBUG
+    
+    prediction_composition = predict_rf(yvar = "_composition",
                                         assemblages = data,
                                         rows_train = rows_train,
                                         method = results_table$method[i],
                                         num_species=num_species)
-      results_table$abundance.r2[i]=prediction_abundance$r2
-      write.csv(prediction_abundance$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_abundance_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
-      write.csv(prediction_abundance$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_abundance_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
-         
-      #print(results_table[i,,drop=FALSE]) # DEBUG
-      
-      prediction_composition = predict_rf(yvar = "_composition",
-                                          assemblages = data,
-                                          rows_train = rows_train,
-                                          method = results_table$method[i],
-                                          num_species=num_species)
-      results_table$composition.balanced_accuracy[i]=prediction_composition$ba
-      write.csv(prediction_composition$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_composition_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
-      write.csv(prediction_composition$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_composition_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
-      
-      #print(results_table[i,,drop=FALSE]) # DEBUG
-      
-      prediction_richness = predict_rf(yvar = 'richness',
-                                       assemblages = data,
-                                       rows_train = rows_train,
-                                       method = results_table$method[i],
-                                       num_species=num_species)
-      results_table$richness.r2[i]=prediction_richness$r2
-      write.csv(prediction_richness$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_richness_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
-      write.csv(prediction_richness$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_richness_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
-      
-      #print(results_table[i,,drop=FALSE]) # DEBUG
-      
-      prediction_fs = predict_rf(yvar = 'feasible.and.stable',
-                                 assemblages = data,
-                                 rows_train = rows_train,
-                                 method = results_table$method[i],
-                                 num_species=num_species)
-      results_table$feasible.and.stable.balanced_accuracy[i]=prediction_fs$ba
-      write.csv(prediction_fs$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_fs_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
-      write.csv(prediction_fs$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_fs_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i]), row.names=FALSE)
-      
-      #print(results_table[i,,drop=FALSE]) # DEBUG
-      
-      
-  
-      
-      results_table$num_species = num_species
-      results_table$num_replicates_in_data = num_replicates_in_data
-      results_table$num_cases = nrow(data)
-      
-      
-      
-  
-      #write.csv(results_table[i,,drop=FALSE],file=sprintf('temp_%s_%d.csv',fn,i),row.names=FALSE) # DEBUG
-      
-      return(results_table[i,,drop=FALSE])
-    }
+    results_table$composition.balanced_accuracy[i]=prediction_composition$ba
+    #write.csv(prediction_composition$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_composition_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+    #write.csv(prediction_composition$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_composition_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+    
+    #print(results_table[i,,drop=FALSE]) # DEBUG
+    
+    prediction_richness = predict_rf(yvar = 'richness',
+                                     assemblages = data,
+                                     rows_train = rows_train,
+                                     method = results_table$method[i],
+                                     num_species=num_species)
+    results_table$richness.r2[i]=prediction_richness$r2
+    #write.csv(prediction_richness$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_richness_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+    #write.csv(prediction_richness$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_richness_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+    
+    #print(results_table[i,,drop=FALSE]) # DEBUG
+    
+    prediction_fs = predict_rf(yvar = 'feasible.and.stable',
+                               assemblages = data,
+                               rows_train = rows_train,
+                               method = results_table$method[i],
+                               num_species=num_species)
+    results_table$feasible.and.stable.balanced_accuracy[i]=prediction_fs$ba
+    #write.csv(prediction_fs$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_fs_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+    #write.csv(prediction_fs$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_fs_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+    
+    #print(results_table[i,,drop=FALSE]) # DEBUG
+    
+    
+
+    
+    results_table$num_species = num_species
+    results_table$num_replicates_in_data = num_replicates_in_data
+    results_table$num_cases = nrow(data)
+    
+    
+    
+
+    #write.csv(results_table[i,,drop=FALSE],file=sprintf('temp_%s_%d.csv',fn,i),row.names=FALSE) # DEBUG
+    
+    return(results_table[i,,drop=FALSE])
   }, mc.cores=CORES) # DEBUG
   
   #saveRDS(results_list, file=sprintf('temp_results_%s.Rdata',fn)) #DEBUG
@@ -405,3 +432,11 @@ do_predictions(data_annual_plant_18,
                fn = 'annual_plant',
                num_species = 18, 
                num_replicates_in_data = 1)
+
+
+data_fly_5 = read.csv('data_fly/data_fly.csv') %>%
+  mutate(stable=FALSE) ## this is not really true, but we need non-NA values to run the script - we will later not analyze this column
+do_predictions(data_fly_5,
+               fn = 'fly',
+               num_species = 5, 
+               num_replicates_in_data = 48)

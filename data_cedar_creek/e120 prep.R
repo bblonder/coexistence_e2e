@@ -105,7 +105,7 @@ cv.star = apply(star, c(1,2), function(x) { cv = sd(x)/mean(x); cv[is.nan(cv)] =
 cv.star.mean = apply(cv.star, 1, mean)
 
 data_final = data_2018
-data_final$stable = (cv.star.mean < 0.5)  
+#data_final$stable = (cv.star.mean < 0.5)  
 data_final$richness = apply(data_final %>% select(all_of(paste(letters[1:length(names_planted)],"star",sep="."))),1,function(x) { sum(x>0)})
 
 write.csv(data_final, file='cedar_creek_2018.csv',row.names = FALSE)

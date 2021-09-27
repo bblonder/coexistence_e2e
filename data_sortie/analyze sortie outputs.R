@@ -1,5 +1,7 @@
 library(dplyr)
 library(data.table)
+library(reshape)
+library(ggplot2)
 
 files = dir('outputs',pattern = '*out',full.names = TRUE)
 
@@ -22,14 +24,26 @@ process_row <- function(i)
   df1 = data.frame(t(composition_initial_this))
   names(df1) =letters[1:length(composition_initial_this)]
   
-  df2 = data.frame(feasible=all(n_final_this>=0), 
-                   stable=n_cv_last_50yr_mean_this<0.5,
+  df2 = data.frame(feasible=TRUE,#all(n_final_this>=0), 
+                   stable=NA,#n_cv_last_50yr_mean_this<0.5,
                    richness = sum(n_final_this>=1))
   
   df3 = data.frame(t(as.numeric(n_final_this)))
   names(df3) = paste(letters[1:length(n_final_this)],"star",sep=".")
   
   df_out = cbind(df1, df2, df3)
+  
+  
+  df_melted_adult = df_this %>% 
+    select(Step, Adult.Abs.Den..ACRU:Adult.Abs.Den..QURU) %>% as.data.frame %>%
+    melt(id=1)
+  
+  g = ggplot(df_melted_adult,aes(x=Step,y=value,col=variable)) +
+    geom_line() +
+    ggtitle(files[1]) +
+    theme_bw()
+  
+  ggsave(g, file=sprintf('~/Downloads/%s.pdf', basename(files[i])))
   
   cat('.')
   

@@ -4,6 +4,9 @@ library(progress)
 library(parallel)
 library(data.table)
 
+NUM_CORES = 16
+
+
 # we assume the row and column orders are the same
 params_vital = read.csv('speciesvitalrates.csv') %>% 
 					select(-species)
@@ -97,8 +100,8 @@ fill_in_assemblages <- function(assemblages, params)
     
     x_star = nt[nrow(nt),,drop=TRUE]
 
-    assemblages[i,"stable"] = mean(apply(tail(nt,5), 2, function(x) {sd(x) / mean(x)}  )) < 0.5
-    assemblages[i,"feasible"] = all(nt[nrow(nt),] >= 0)
+    assemblages[i,"stable"] = NA#mean(apply(tail(nt,5), 2, function(x) {sd(x) / mean(x)}  )) < 0.5
+    assemblages[i,"feasible"] = TRUE#all(nt[nrow(nt),] >= 0)
     
     if (length(x_star) > 0)
     {
@@ -112,7 +115,7 @@ fill_in_assemblages <- function(assemblages, params)
     assemblages[i,"richness"] = sum(x_star > 0.01)
     
     return(assemblages[i,])
-  }, mc.cores=16)
+  }, mc.cores=NUM_CORES)
   result_final = rbindlist(result)
   #pb$terminate()
   
