@@ -1,0 +1,127 @@
+"rep","method","frac","richness.r2","feasible.and.stable.balanced_accuracy","composition.balanced_accuracy","abundance.r2","sampling_strategy","num_train","num_species","num_replicates_in_data","num_cases"
+1,"naive",1e-05,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e + reshuffle",1e-05,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e",1e-05,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"naive",1.83298071083244e-05,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e + reshuffle",1.83298071083244e-05,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e",1.83298071083244e-05,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"naive",3.35981828628378e-05,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e + reshuffle",3.35981828628378e-05,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e",3.35981828628378e-05,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"naive",6.15848211066026e-05,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e + reshuffle",6.15848211066026e-05,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e",6.15848211066026e-05,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"naive",0.000112883789168469,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e + reshuffle",0.000112883789168469,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e",0.000112883789168469,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"naive",0.000206913808111479,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e + reshuffle",0.000206913808111479,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e",0.000206913808111479,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"naive",0.000379269019073225,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e + reshuffle",0.000379269019073225,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"e2e",0.000379269019073225,NA,NA,NA,NA,"high-1",0,18,1,0
+1,"naive",1e-05,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e + reshuffle",1e-05,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e",1e-05,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"naive",1.83298071083244e-05,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e + reshuffle",1.83298071083244e-05,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e",1.83298071083244e-05,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"naive",3.35981828628378e-05,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e + reshuffle",3.35981828628378e-05,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e",3.35981828628378e-05,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"naive",6.15848211066026e-05,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e + reshuffle",6.15848211066026e-05,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e",6.15848211066026e-05,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"naive",0.000112883789168469,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e + reshuffle",0.000112883789168469,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e",0.000112883789168469,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"naive",0.000206913808111479,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e + reshuffle",0.000206913808111479,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e",0.000206913808111479,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"naive",0.000379269019073225,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e + reshuffle",0.000379269019073225,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"e2e",0.000379269019073225,NA,NA,NA,NA,"high-2",0,18,1,0
+1,"naive",1e-05,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e + reshuffle",1e-05,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e",1e-05,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"naive",1.83298071083244e-05,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e + reshuffle",1.83298071083244e-05,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e",1.83298071083244e-05,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"naive",3.35981828628378e-05,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e + reshuffle",3.35981828628378e-05,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e",3.35981828628378e-05,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"naive",6.15848211066026e-05,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e + reshuffle",6.15848211066026e-05,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e",6.15848211066026e-05,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"naive",0.000112883789168469,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e + reshuffle",0.000112883789168469,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e",0.000112883789168469,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"naive",0.000206913808111479,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e + reshuffle",0.000206913808111479,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e",0.000206913808111479,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"naive",0.000379269019073225,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e + reshuffle",0.000379269019073225,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"e2e",0.000379269019073225,NA,NA,NA,NA,"high-3",0,18,1,0
+1,"naive",1e-05,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e + reshuffle",1e-05,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e",1e-05,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"naive",1.83298071083244e-05,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e + reshuffle",1.83298071083244e-05,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e",1.83298071083244e-05,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"naive",3.35981828628378e-05,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e + reshuffle",3.35981828628378e-05,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e",3.35981828628378e-05,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"naive",6.15848211066026e-05,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e + reshuffle",6.15848211066026e-05,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e",6.15848211066026e-05,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"naive",0.000112883789168469,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e + reshuffle",0.000112883789168469,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e",0.000112883789168469,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"naive",0.000206913808111479,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e + reshuffle",0.000206913808111479,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e",0.000206913808111479,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"naive",0.000379269019073225,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e + reshuffle",0.000379269019073225,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"e2e",0.000379269019073225,NA,NA,NA,NA,"low-1",0,18,1,0
+1,"naive",1e-05,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e + reshuffle",1e-05,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e",1e-05,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"naive",1.83298071083244e-05,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e + reshuffle",1.83298071083244e-05,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e",1.83298071083244e-05,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"naive",3.35981828628378e-05,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e + reshuffle",3.35981828628378e-05,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e",3.35981828628378e-05,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"naive",6.15848211066026e-05,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e + reshuffle",6.15848211066026e-05,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e",6.15848211066026e-05,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"naive",0.000112883789168469,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e + reshuffle",0.000112883789168469,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e",0.000112883789168469,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"naive",0.000206913808111479,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e + reshuffle",0.000206913808111479,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e",0.000206913808111479,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"naive",0.000379269019073225,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e + reshuffle",0.000379269019073225,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"e2e",0.000379269019073225,NA,NA,NA,NA,"low-2",0,18,1,0
+1,"naive",1e-05,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e + reshuffle",1e-05,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e",1e-05,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"naive",1.83298071083244e-05,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e + reshuffle",1.83298071083244e-05,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e",1.83298071083244e-05,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"naive",3.35981828628378e-05,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e + reshuffle",3.35981828628378e-05,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e",3.35981828628378e-05,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"naive",6.15848211066026e-05,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e + reshuffle",6.15848211066026e-05,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e",6.15848211066026e-05,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"naive",0.000112883789168469,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e + reshuffle",0.000112883789168469,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e",0.000112883789168469,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"naive",0.000206913808111479,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e + reshuffle",0.000206913808111479,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e",0.000206913808111479,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"naive",0.000379269019073225,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e + reshuffle",0.000379269019073225,NA,NA,NA,NA,"low-3",0,18,1,0
+1,"e2e",0.000379269019073225,NA,NA,NA,NA,"low-3",0,18,1,0

@@ -6,11 +6,12 @@ library(caret)
 library(randomForestSRC)
 library(parallel)
 library(data.table)
+library(reshape)
 
 # KEY SETUP
 dir.create("outputs_statistical")
-CORES = 8 # number of cores to parallel process on
-REPLICATES = 3
+CORES = 16 # number of cores to parallel process on
+REPLICATES = 5
 GRID_POINTS = 20
 # END
 
@@ -33,8 +34,14 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
 {
   print(yvar) # DEBUG
   
+  if (length(rows_train)==0) # if there is no training data at the expected richness
+  {
+    return(NULL)
+  }
+  
   rows_test = setdiff(1:nrow(assemblages), rows_train)
   
+  # select training subset
   data_for_rf_training = assemblages[rows_train,]
   
   if (method=='e2e + reshuffle')
@@ -123,7 +130,7 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
     else
     {
       results = data.frame(pred = as.numeric(as.matrix(values_predicted)), obs = as.numeric(as.matrix(values_observed)))
-      message('across whole dataset not individual cases')
+      
       m_lm = NULL
       try(m_lm <- lm(pred~obs,data=results))
       if (!is.null(m_lm))
@@ -237,19 +244,38 @@ lseq <- function(from, to, length.out) {
   exp(seq(log(from), log(to), length.out = length.out))
 }
 
+
+source('quantile_trim.R')
+
+
+
 do_predictions <- function(input_file,fn,
                            num_species, 
                            num_replicates_in_data = 1, 
                            num_replicates_in_rf=REPLICATES,
-                           num_grid_points=GRID_POINTS)
+                           num_grid_points=GRID_POINTS,
+                           min_frac = 1e-5)
 {
   data = input_file %>%
-    mutate(feasible.and.stable = factor(stable & feasible))
+    mutate(feasible.and.stable = factor(stable & feasible)) %>%
+    select(-feasible, -stable)
+  
+  # remove outliers for all datasets
+  data = quantile_trim(data)
+  
+  # remove missing cases that arose from the above
+  which_rows_na = data %>% 
+    select(contains("star")) %>% 
+    rowSums %>%
+    is.na %>%
+    which
+  print(sprintf("Removed %d NA case rows",length(which_rows_na)))
+  data = data[-which_rows_na,]
   
   # determine if we have all the possible cases
-  dataset_complete = (num_replicates_in_data * 2^num_species == nrow(input_file))
+  dataset_complete = (num_replicates_in_data * 2^num_species == nrow(data))
   
-  seq_all = lseq(1e-6,1,length.out=num_grid_points)
+  seq_all = lseq(min_frac,1,length.out=num_grid_points)
   
   if(dataset_complete==TRUE)
   {
@@ -270,12 +296,17 @@ do_predictions <- function(input_file,fn,
                               abundance.r2=NA,
                               sampling_strategy=c("high-1","high-2","high-3",
                                                   "low-1","low-2","low-3",
-                                                  "mixed")
+                                                  "mixed"),
+                              num_train=NA,
+                              num_species=NA,
+                              num_replicates_in_data=NA,
+                              num_cases=NA
   )
   
   results_list = mclapply(1:nrow(results_table), function(i) # DEBUG #lapply(1:nrow(results_table), function(i)#
   {
-    print(cbind(file=fn, i=i, frac=i/nrow(results_table), results_table[i,])) #DEBUG
+    #cat('.')
+    print(cbind(file=fn, i=i, fraction_finished=i/nrow(results_table), results_table[i,])) #DEBUG
 
     if (results_table$sampling_strategy[i]=="mixed")
     {
@@ -298,7 +329,12 @@ do_predictions <- function(input_file,fn,
       
       which_rows = which(initial_richness <= max_richness)
       
-      n_train = ceiling(length(which_rows)*results_table$frac[i])
+      n_train = ceiling(nrow(data)*results_table$frac[i])
+      if (n_train > length(which_rows)) # if we are requesting more points than exist in the number of cases available
+      {
+        print('too many points requested for low sampling, skipping')
+        return(NULL)
+      }
       
       rows_train = sample(x=which_rows, size=n_train)
     }
@@ -309,7 +345,12 @@ do_predictions <- function(input_file,fn,
       
       which_rows = which(initial_richness >= min_richness)
       
-      n_train = ceiling(length(which_rows)*results_table$frac[i])
+      n_train = ceiling(nrow(data)*results_table$frac[i])
+      if (n_train > length(which_rows)) # if we are requesting more points than exist in the number of cases available
+      {
+        print('too many points requested for high sampling, skipping')
+        return(NULL)
+      }
       
       rows_train = sample(x=which_rows, size=n_train)
     }
@@ -320,10 +361,12 @@ do_predictions <- function(input_file,fn,
                                       rows_train = rows_train,
                                       method = results_table$method[i],
                                       num_species=num_species)
-    results_table$abundance.r2[i]=prediction_abundance$r2
-    write.csv(prediction_abundance$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_abundance_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
-    write.csv(prediction_abundance$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_abundance_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
-       
+    if(!is.null(prediction_abundance) & results_table$rep[i]==1) # just to cut down on duplicate outputs
+    {
+      results_table$abundance.r2[i]=prediction_abundance$r2
+      write.csv(prediction_abundance$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_abundance_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+      write.csv(prediction_abundance$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_abundance_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+    }   
     #print(results_table[i,,drop=FALSE]) # DEBUG
     
     prediction_composition = predict_rf(yvar = "_composition",
@@ -331,10 +374,12 @@ do_predictions <- function(input_file,fn,
                                         rows_train = rows_train,
                                         method = results_table$method[i],
                                         num_species=num_species)
-    results_table$composition.balanced_accuracy[i]=prediction_composition$ba
-    #write.csv(prediction_composition$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_composition_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
-    #write.csv(prediction_composition$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_composition_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
-    
+    if (!is.null(prediction_composition))
+    {
+      results_table$composition.balanced_accuracy[i]=prediction_composition$ba
+      #write.csv(prediction_composition$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_composition_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+      #write.csv(prediction_composition$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_composition_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+    }
     #print(results_table[i,,drop=FALSE]) # DEBUG
     
     prediction_richness = predict_rf(yvar = 'richness',
@@ -342,29 +387,40 @@ do_predictions <- function(input_file,fn,
                                      rows_train = rows_train,
                                      method = results_table$method[i],
                                      num_species=num_species)
-    results_table$richness.r2[i]=prediction_richness$r2
-    #write.csv(prediction_richness$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_richness_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
-    #write.csv(prediction_richness$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_richness_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
-    
+    if (!is.null(prediction_richness))
+    {
+      results_table$richness.r2[i]=prediction_richness$r2
+      #write.csv(prediction_richness$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_richness_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+      #write.csv(prediction_richness$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_richness_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+    }
     #print(results_table[i,,drop=FALSE]) # DEBUG
     
-    prediction_fs = predict_rf(yvar = 'feasible.and.stable',
-                               assemblages = data,
-                               rows_train = rows_train,
-                               method = results_table$method[i],
-                               num_species=num_species)
-    results_table$feasible.and.stable.balanced_accuracy[i]=prediction_fs$ba
-    #write.csv(prediction_fs$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_fs_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
-    #write.csv(prediction_fs$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_fs_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
-    
+    if(!all(is.na(data$feasible.and.stable)))
+    {
+      prediction_fs = predict_rf(yvar = 'feasible.and.stable',
+                                 assemblages = data,
+                                 rows_train = rows_train,
+                                 method = results_table$method[i],
+                                 num_species=num_species)
+    }
+    else
+    {
+      prediction_fs = NULL
+    }
+    if (!is.null(prediction_fs))
+    {
+      results_table$feasible.and.stable.balanced_accuracy[i]=prediction_fs$ba
+      #write.csv(prediction_fs$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_fs_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+      #write.csv(prediction_fs$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_fs_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+    }
     #print(results_table[i,,drop=FALSE]) # DEBUG
     
     
-
+    results_table$num_train[i] = n_train
     
-    results_table$num_species = num_species
-    results_table$num_replicates_in_data = num_replicates_in_data
-    results_table$num_cases = nrow(data)
+    results_table$num_species[i] = num_species
+    results_table$num_replicates_in_data[i] = num_replicates_in_data
+    results_table$num_cases[i] = nrow(data)
     
     
     
@@ -396,25 +452,25 @@ do_predictions <- function(input_file,fn,
 # do analyses
 data_assemblages_cedar_creek_18 = read.csv('data_cedar_creek/cedar_creek_2018.csv')
 do_predictions(data_assemblages_cedar_creek_18,
-               fn = 'cedar_creek',
+               fn = 'cedar_creek_plants',
                num_species = 18,
                num_replicates_in_data = 1)
 
 data_sortie_9_3 = read.csv('data_sortie/data_sortie.csv')
 do_predictions(data_sortie_9_3,
-               fn = 'sortie',
+               fn = 'sortie-nd_plants',
                num_species = 9,
                num_replicates_in_data = 3)
 
 data_assemblages_H_12 = read.csv('data_glv/assemblages_H_12.csv')
 do_predictions(data_assemblages_H_12,
-               'glv_human',
+               'human_gut',
                num_species = 12,
                num_replicates_in_data = 1)
 
 data_assemblages_M_11 = read.csv('data_glv/assemblages_M_11.csv')
 do_predictions(data_assemblages_M_11,
-               fn = 'glv_mouse',
+               fn = 'mouse_gut',
                num_species = 11,
                num_replicates_in_data = 1)
 
@@ -433,10 +489,8 @@ do_predictions(data_annual_plant_18,
                num_species = 18, 
                num_replicates_in_data = 1)
 
-
-data_fly_5 = read.csv('data_fly/data_fly.csv') %>%
-  mutate(stable=FALSE) ## this is not really true, but we need non-NA values to run the script - we will later not analyze this column
+data_fly_5 = read.csv('data_fly/data_fly.csv')
 do_predictions(data_fly_5,
-               fn = 'fly',
+               fn = 'fly_gut',
                num_species = 5, 
                num_replicates_in_data = 48)

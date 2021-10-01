@@ -1,8 +1,5 @@
-"dataset_short","num_species","num_replicates_in_data","num_cases","stochastic","empirical"
-"fly",5,48,1536,FALSE,TRUE
+"name","num_species","num_replicates_in_data","num_cases","stochastic","empirical"
 "sortie",9,3,1536,TRUE,FALSE
 "glv_mouse",11,1,2048,FALSE,FALSE
 "glv_human",12,1,4096,FALSE,FALSE
-"glv_simulated",16,1,16384,FALSE,FALSE
-"annual_plant",18,1,16384,FALSE,FALSE
 "cedar_creek",18,1,154,FALSE,TRUE
