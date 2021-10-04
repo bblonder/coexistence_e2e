@@ -361,11 +361,15 @@ do_predictions <- function(input_file,fn,
                                       rows_train = rows_train,
                                       method = results_table$method[i],
                                       num_species=num_species)
-    if(!is.null(prediction_abundance) & results_table$rep[i]==1) # just to cut down on duplicate outputs
+
+    if(!is.null(prediction_abundance))
     {
       results_table$abundance.r2[i]=prediction_abundance$r2
-      write.csv(prediction_abundance$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_abundance_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
-      write.csv(prediction_abundance$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_abundance_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+      if (results_table$rep[i]==1) # just to cut down on duplicate outputs
+      {
+        write.csv(prediction_abundance$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_abundance_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+        write.csv(prediction_abundance$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_abundance_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+      }
     }   
     #print(results_table[i,,drop=FALSE]) # DEBUG
     

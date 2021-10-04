@@ -6,7 +6,7 @@ library(wesanderson)
 library(tibble)
 library(ggpubr)
 
-dir.create('outputs_figures')
+try(dir.create('outputs_figures'))
 
 fn_outputs = dir('outputs_statistical',pattern="results*",full.names = TRUE)
 
@@ -23,36 +23,83 @@ df_all = rbindlist(lapply(1:length(fn_outputs), function(i)
   return(df_this)
 }))
 
-nice_names = c(fly_gut="Fly gut", 
-               human_gut="Human gut",
+nice_names = c(`annual_plant`="Annual plant",
+  `cedar_creek_plants`="Cedar Creek",
+  `fly_gut`="Fly gut", 
+  `glv_simulated`="GLV simulated",
+  `human_gut`="Human gut",
+  `mouse_gut`="Mouse gut", 
+  `sortie-nd_plants`="SORTIE-ND" 
                )
 
+# add NA removal counts
+source('quantile_trim.R')
+fns = c(`cedar_creek_plants`='data_cedar_creek/cedar_creek_2018.csv', 
+        `sortie-nd_plants`='data_sortie/data_sortie.csv',
+        `human_gut`='data_glv/assemblages_H_12.csv',
+        `mouse_gut`='data_glv/assemblages_M_11.csv',
+        `glv_simulated`='data_glv/assemblages_glv_16.csv',
+        `annual_plant`='data_annual_plant/assemblages_annual_plant_18.csv',
+        `fly_gut`='data_fly/data_fly.csv')
+
+row_counts = sapply(fns, function(x) {nrow(read.csv(x))})
+row_counts_trimmed = sapply(fns, function(x) {
+  q = quantile_trim(read.csv(x))
+  counts = q %>% 
+    select(contains("star")) %>%
+    na.omit %>%
+    nrow
+  return(counts)
+  })
+num_nas = row_counts - row_counts_trimmed
+
+# calculate stats
 df_all_stats = df_all %>% 
-  select(name,num_species, num_replicates_in_data, num_cases) %>%
+  select(name,num_species, num_replicates_in_data) %>%
+  mutate(nice_name = nice_names[name]) %>%
   unique %>%
-  arrange(num_species) %>%
-  mutate(stochastic=name %in% c("sortie")) %>%
-  mutate(empirical=name %in% c("cedar_creek","fly"))
+  mutate(deterministic=name %in% c("mouse_gut","human_gut","glv_simulated")) %>%
+  mutate(empirical=name %in% c("cedar_creek_plants","fly_gut")) %>%
+  mutate(num_na = num_nas[name]) %>%
+  mutate(num_states = row_counts[name]) %>%
+  select(name, nice_name, deterministic, empirical, n=num_species, q=num_replicates_in_data, qx2n=num_states, num_na=num_na) %>%
+  arrange(nice_name)
 
-write.csv(df_all_stats,'outputs_figures/table_dataset_stats.csv',row.names=F)
 
- 
+write.csv(df_all_stats %>% select(-name),'outputs_figures/table_dataset_stats.csv',row.names=F)
+
+# get nice names
+nn = df_all_stats$nice_name
+names(nn) = df_all_stats$name
+
+
+
+
+
+
+
+
+
 make_plot_performance <- function(data,yvar,ylab)
 {
-  ggplot(data,
+  data_ss = data %>% filter(num_train > 5) # cut off the single samples
+  
+  ggplot(data_ss,
          aes_string(x="frac",y=yvar,col="method")) +
-    geom_point() +
-    facet_grid(name~sampling_strategy,switch='x') +
+    geom_point(alpha=0.5) +
+    facet_grid(name~sampling_strategy,switch='x',
+               labeller=labeller(name=nn)) +
     theme_bw() +
     ylim(0,1) +
-    scale_x_log10() +
+    scale_x_log10(limits=c(1e-5,1e0),labels = function(x) format(x, scientific = TRUE)) +
     stat_summary(fun=mean, geom="line") +     
     xlab(expression(paste(beta, " (training fraction out of ",q %*% 2^n,")"))) +
     ylab(ylab) +
     theme(legend.position='bottom') +
     scale_color_manual(values=wes_palette("Darjeeling1")) +
     #geom_vline(mapping=aes(xintercept = x.cutoff), data=df_all_cutoff) +
-    annotation_logticks(color='gray',alpha=0.5)
+    annotation_logticks(color='gray',alpha=0.5) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 }
 
 
@@ -61,26 +108,26 @@ make_plot_performance <- function(data,yvar,ylab)
 
 
 
-g_abundance = make_plot_performance(data=df_all,
+g_performance_abundance = make_plot_performance(data=df_all,
                         yvar="abundance.r2", 
                         ylab=expression(paste(R^2, " of abundance prediction")))
-ggsave(g_abundance, file='outputs_figures/g_abundance.png',width=7,height=10)
+ggsave(g_performance_abundance, file='outputs_figures/g_performance_abundance.png',width=8,height=8)
 
 
-g_composition = make_plot_performance(data=df_all,
+g_performance_composition = make_plot_performance(data=df_all,
                         yvar="composition.balanced_accuracy", 
                         ylab="Balanced accuracy of composition prediction")
-ggsave(g_composition, file='outputs_figures/g_composition.png',width=7,height=5)
+ggsave(g_performance_composition, file='outputs_figures/g_performance_composition.png',width=8,height=8)
 
-g_fs = make_plot_performance(data=df_all,
+g_performance_fs = make_plot_performance(data=df_all,
                       yvar="feasible.and.stable.balanced_accuracy",
                       ylab="Balanced accuracy of feasibility+stability prediction")
-ggsave(g_fs, file='outputs_figures/g_fs.png',width=7,height=5)
+ggsave(g_performance_fs, file='outputs_figures/g_performance_fs.png',width=8,height=8)
 
-g_richness = make_plot_performance(data=df_all,
+g_performance_richness = make_plot_performance(data=df_all,
                        yvar="richness.r2",
                        ylab="R2 of richness prediction")
-ggsave(g_richness, file='outputs_figures/g_richness.png',width=7,height=5)
+ggsave(g_performance_richness, file='outputs_figures/g_performance_richness.png',width=8,height=8)
 
 
 
@@ -99,6 +146,7 @@ plot_obs_pred_scatter <- function(list_data)
   pred = read.csv(list_data$fn_pred) %>% as.matrix %>% as.numeric
   
   frac = list_data$best_frac
+  name = list_data$name
   
   df = data.frame(obs=obs, pred=pred)
   
@@ -109,10 +157,12 @@ plot_obs_pred_scatter <- function(list_data)
     theme_bw() + 
     geom_hex(aes(fill = stat(log10(count)))) +
     scale_fill_gradient(low="lightgray",high="darkorchid") +
+    scale_x_continuous(labels = function(x) format(x, scientific = TRUE)) +
     xlab("Observed abundance") + 
     ylab("Predicted abundance") +
     stat_smooth(method='lm') +
-    ggtitle(bquote(beta ~ "=" ~ .(frac))) +
+    ggtitle(nn[name]) +
+    #ggtitle(bquote(beta ~ "=" ~ .(frac))) +
     coord_fixed() +
     xlim(minval, maxval) + 
     ylim(minval, maxval)
@@ -132,7 +182,7 @@ pick_datasets <- function(df, name, fraction, method, sampling_strategy)
   ids = grep(pattern=sprintf('fn=%s',name),possible_files)
   possible_files = possible_files[ids]
   
-  ids = grep(pattern=sprintf('method=%s',method),possible_files)
+  ids = grep(pattern=sprintf('method=%s_',method),possible_files)
   possible_files = possible_files[ids]
   
   ids = grep(pattern=sprintf('frac=%f',best_frac$frac[1]),possible_files)
@@ -150,7 +200,8 @@ pick_datasets <- function(df, name, fraction, method, sampling_strategy)
     
     return(list(fn_obs = file_obs,
              fn_pred = file_pred,
-             best_frac = best_frac$frac[1]))
+             best_frac = best_frac$frac[1],
+             name = name))
   }
   else
   {
@@ -161,26 +212,24 @@ pick_datasets <- function(df, name, fraction, method, sampling_strategy)
 
 plot_scatter_dataset <- function(name)
 {
-  plots_all = lapply(c(0.001,0.01,0.05), function(i)
-  { 
-    l_this = pick_datasets(df_all, name=name, fraction=i, method='e2e', sampling_strategy='mixed')
-    if (!is.null(l_this))
-    {
-      plot_obs_pred_scatter(l_this)
-    }
-    else
-    {
-      return(NULL)
-    }
-  })
+  l_this = pick_datasets(df_all, name=name, fraction=1e-2, method='e2e', sampling_strategy='mixed')
+  if (!is.null(l_this))
+  {
+    p = plot_obs_pred_scatter(l_this)
+  }
+  else
+  {
+    return(NULL)
+  }
   
-  return(ggarrange(plotlist = plots_all,nrow=1,ncol=3,common.legend = TRUE,legend='right'))
+  return(p)
+  #return(ggarrange(plotlist = plots_all,nrow=1,ncol=length(plots_all),common.legend = TRUE,legend='right'))
 }
 
 perf_plots = lapply(df_all_stats$name, plot_scatter_dataset)
 
-ggarrange(plotlist=perf_plots,nrow=4,ncol=1)
-
+g_performance_scatter = ggarrange(plotlist=perf_plots,align='hv',common.legend = TRUE,legend='bottom')
+ggsave(g_performance_scatter, file='outputs_figures/g_performance_scatter.png',width=10,height=10)
 
 
 

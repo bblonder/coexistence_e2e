@@ -1,6 +1,7 @@
 library(ggplot2)
 library(reshape)
 library(dplyr)
+library(ggpubr)
 
 source('quantile_trim.R')
 
@@ -46,6 +47,7 @@ plot_data <- function(data,name)
   ggsave(ggarrange(g_in, g_out,nrow=1,ncol=2,align='hv'),file=sprintf('outputs_figures/g_experiment_%s.png',name),width=6,height=8)
 }
 
+try(dir.create('outputs_figures'))
 
 data_assemblages_cedar_creek_18 = read.csv('data_cedar_creek/cedar_creek_2018.csv')
 g_cedar_creek = plot_data(data_assemblages_cedar_creek_18,'Cedar Creek')

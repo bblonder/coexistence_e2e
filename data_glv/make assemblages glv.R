@@ -111,6 +111,7 @@ determine_fixed_point <- function(params)
     x_star = -1 * solve(params$A) %*% params$r
     
     x_star = as.numeric(t(x_star))
+    x_star[x_star<0] = 0 # clip to non-negative values to reflect biological realism
     
     names(x_star) = paste(names(params$r),"star",sep=".")
   }

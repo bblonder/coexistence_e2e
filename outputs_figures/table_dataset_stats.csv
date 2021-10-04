@@ -1,5 +1,8 @@
-"name","num_species","num_replicates_in_data","num_cases","stochastic","empirical"
-"sortie",9,3,1536,TRUE,FALSE
-"glv_mouse",11,1,2048,FALSE,FALSE
-"glv_human",12,1,4096,FALSE,FALSE
-"cedar_creek",18,1,154,FALSE,TRUE
+"nice_name","deterministic","empirical","n","q","qx2n","num_na"
+"Annual plant",FALSE,FALSE,18,1,262144,12288
+"Cedar Creek",FALSE,TRUE,18,1,154,14
+"Fly gut",FALSE,TRUE,5,48,1536,36
+"GLV simulated",TRUE,FALSE,16,1,65536,7217
+"Human gut",TRUE,FALSE,12,1,4096,173
+"Mouse gut",TRUE,FALSE,11,1,2048,103
+"SORTIE-ND",FALSE,FALSE,9,3,1536,69
