@@ -91,7 +91,7 @@ make_plot_performance <- function(data,yvar,ylab)
                labeller=labeller(name=nn)) +
     theme_bw() +
     ylim(0,1) +
-    scale_x_log10(limits=c(1e-5,1e0),labels = function(x) format(x, scientific = TRUE)) +
+    scale_x_log10(limits=c(1e-4,1e0),labels = function(x) format(x, scientific = TRUE)) +
     stat_summary(fun=mean, geom="line") +     
     xlab(expression(paste(beta, " (training fraction out of ",q %*% 2^n,")"))) +
     ylab(ylab) +

@@ -18,6 +18,12 @@ params_alpha_gapfill[is.na(params_alpha_gapfill)] = mean(params_alpha,na.rm=T)
 
 params_godoy = list(vital=params_vital, alpha=params_alpha_gapfill)
 
+# count the gap filling impacts
+# number of missing params
+length(which(is.na(params_alpha_gapfill)))
+# total number of params
+length(as.numeric(params_alpha_gapfill))
+
 
 # make assemblages
 generate_assemblages <- function(n, labels=letters)
