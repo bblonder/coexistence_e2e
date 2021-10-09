@@ -454,6 +454,7 @@ do_predictions <- function(input_file,fn,
 
 
 # do analyses
+
 data_assemblages_cedar_creek_18 = read.csv('data_cedar_creek/cedar_creek_2018.csv')
 do_predictions(data_assemblages_cedar_creek_18,
                fn = 'cedar_creek_plants',
@@ -490,11 +491,17 @@ data_annual_plant_18 = read.csv('data_annual_plant/assemblages_annual_plant_18.c
 data_annual_plant_18 = data_annual_plant_18 %>% sample_n(2^14)
 do_predictions(data_annual_plant_18,
                fn = 'annual_plant',
-               num_species = 18, 
+               num_species = 18,
                num_replicates_in_data = 1)
 
 data_fly_5 = read.csv('data_fly/data_fly.csv')
 do_predictions(data_fly_5,
                fn = 'fly_gut',
-               num_species = 5, 
+               num_species = 5,
                num_replicates_in_data = 48)
+
+data_soil_bacteria_8 = read.csv('data_friedman_gore/data_friedman_gore.csv')
+do_predictions(data_soil_bacteria_8,
+               fn = 'soil_bacteria',
+               num_species = 8, 
+               num_replicates_in_data = 2) # this is an underestimate but should not cause problems

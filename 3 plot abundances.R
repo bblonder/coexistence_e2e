@@ -44,7 +44,7 @@ plot_data <- function(data,name)
     ylab('Assemblage') +
     theme(axis.text.x=element_blank(),axis.text.y=element_blank(),axis.ticks.y=element_blank())
   
-  ggsave(ggarrange(g_in, g_out,nrow=1,ncol=2,align='hv'),file=sprintf('outputs_figures/g_experiment_%s.png',name),width=6,height=8)
+  ggsave(ggarrange(g_in, g_out,nrow=1,ncol=2,align='hv'),file=sprintf('outputs_figures/g_experiment_%s.png',name),width=6,height=6)
 }
 
 try(dir.create('outputs_figures'))

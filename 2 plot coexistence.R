@@ -82,7 +82,8 @@ names(nn) = df_all_stats$name
 
 make_plot_performance <- function(data,yvar,ylab)
 {
-  data_ss = data %>% filter(num_train > 5) # cut off the single samples
+  data_ss = data# %>% filter(num_train > 5) # cut off the single samples
+  #print(unique(data_ss$name))
   
   ggplot(data_ss,
          aes_string(x="frac",y=yvar,col="method")) +
@@ -126,7 +127,7 @@ ggsave(g_performance_fs, file='outputs_figures/g_performance_fs.png',width=8,hei
 
 g_performance_richness = make_plot_performance(data=df_all,
                        yvar="richness.r2",
-                       ylab="R2 of richness prediction")
+                       ylab=expression(paste(R^2, " of richness prediction")))
 ggsave(g_performance_richness, file='outputs_figures/g_performance_richness.png',width=8,height=8)
 
 
