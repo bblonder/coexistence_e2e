@@ -29,7 +29,8 @@ nice_names = c(`annual_plant`="Annual plant",
   `glv_simulated`="GLV simulated",
   `human_gut`="Human gut",
   `mouse_gut`="Mouse gut", 
-  `sortie-nd_plants`="SORTIE-ND" 
+  `sortie-nd_plants`="SORTIE-ND",
+  `soil_bacteria`="Soil bacteria"
                )
 
 # add NA removal counts
@@ -40,7 +41,8 @@ fns = c(`cedar_creek_plants`='data_cedar_creek/cedar_creek_2018.csv',
         `mouse_gut`='data_glv/assemblages_M_11.csv',
         `glv_simulated`='data_glv/assemblages_glv_16.csv',
         `annual_plant`='data_annual_plant/assemblages_annual_plant_18.csv',
-        `fly_gut`='data_fly/data_fly.csv')
+        `fly_gut`='data_fly/data_fly.csv',
+        `soil_bacteria`='data_friedman_gore/data_friedman_gore.csv')
 
 row_counts = sapply(fns, function(x) {nrow(read.csv(x))})
 row_counts_trimmed = sapply(fns, function(x) {
@@ -59,10 +61,10 @@ df_all_stats = df_all %>%
   mutate(nice_name = nice_names[name]) %>%
   unique %>%
   mutate(deterministic=name %in% c("mouse_gut","human_gut","glv_simulated")) %>%
-  mutate(empirical=name %in% c("cedar_creek_plants","fly_gut")) %>%
+  mutate(empirical=name %in% c("cedar_creek_plants","fly_gut","soil_bacteria")) %>%
   mutate(num_na = num_nas[name]) %>%
   mutate(num_states = row_counts[name]) %>%
-  select(name, nice_name, deterministic, empirical, n=num_species, q=num_replicates_in_data, qx2n=num_states, num_na=num_na) %>%
+  select(name, nice_name, deterministic, empirical, n=num_species, q=num_replicates_in_data, num_states=num_states, num_na=num_na) %>%
   arrange(nice_name)
 
 
@@ -112,7 +114,7 @@ make_plot_performance <- function(data,yvar,ylab)
 g_performance_abundance = make_plot_performance(data=df_all,
                         yvar="abundance.r2", 
                         ylab=expression(paste(R^2, " of abundance prediction")))
-ggsave(g_performance_abundance, file='outputs_figures/g_performance_abundance.png',width=8,height=8)
+ggsave(g_performance_abundance, file='outputs_figures/g_performance_abundance.png',width=8,height=9)
 
 
 g_performance_composition = make_plot_performance(data=df_all,
@@ -229,8 +231,8 @@ plot_scatter_dataset <- function(name)
 
 perf_plots = lapply(df_all_stats$name, plot_scatter_dataset)
 
-g_performance_scatter = ggarrange(plotlist=perf_plots,align='hv',common.legend = TRUE,legend='bottom')
-ggsave(g_performance_scatter, file='outputs_figures/g_performance_scatter.png',width=10,height=10)
+g_performance_scatter = ggarrange(plotlist=perf_plots,align='hv',common.legend = TRUE,legend='bottom',nrow=2,ncol=4)
+ggsave(g_performance_scatter, file='outputs_figures/g_performance_scatter.png',width=10,height=5)
 
 
 

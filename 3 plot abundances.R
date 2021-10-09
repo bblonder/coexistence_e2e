@@ -70,4 +70,5 @@ g_annual_plant = plot_data(data_annual_plant_18,'Annual plant')
 data_fly_5 = read.csv('data_fly/data_fly.csv')
 g_fly = plot_data(data_fly_5,'Fly gut')
 
-
+data_soil_bacteria_8 = read.csv('data_friedman_gore/data_friedman_gore.csv')
+g_soil_bacteria = plot_data(data_soil_bacteria_8,'Soil bacteria')
