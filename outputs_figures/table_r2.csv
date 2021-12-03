@@ -1,0 +1,9 @@
+"yvar","variable","value"
+"abundance.r2","R2m",0.41834567895597
+"abundance.r2","R2c",0.753505550341019
+"composition.balanced_accuracy","R2m",0.588269668663617
+"composition.balanced_accuracy","R2c",0.806999114916097
+"feasible.and.stable.balanced_accuracy","R2m",0.810506744641942
+"feasible.and.stable.balanced_accuracy","R2c",0.828063847981493
+"richness.r2","R2m",0.428250629726111
+"richness.r2","R2c",0.835872913523419

@@ -1,4 +1,4 @@
-"nice_name","deterministic","empirical","n","q","qx2n","num_na"
+"nice_name","deterministic","empirical","n","q","num_states","num_na"
 "Annual plant",FALSE,FALSE,18,1,262144,12288
 "Cedar Creek",FALSE,TRUE,18,1,154,14
 "Fly gut",FALSE,TRUE,5,48,1536,36

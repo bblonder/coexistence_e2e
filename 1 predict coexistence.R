@@ -30,6 +30,21 @@ freq_weight <- function(x)
   return(weights_by_x)
 }
 
+r2_casewise_mean <- function(pred, obs)
+{
+  stopifnot(nrow(pred) == nrow(obs))
+  stopifnot(ncol(pred) == ncol(obs))
+  
+  r2_all = sapply(1:nrow(pred), function(i) {
+    df_this_assemblage = data.frame(pred=as.numeric(pred[i,,drop=TRUE]), obs=as.numeric(obs[i,,drop=TRUE]))
+    
+    r2 = summary(lm(pred~obs,data=df_this_assemblage))$r.squared
+  })
+  
+  r2_mean = mean(r2_all, na.rm=T)
+  return(r2_mean)
+}
+
 predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
 {
   print(yvar) # DEBUG
@@ -113,6 +128,7 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
       values_observed = assemblages[rows_test,yvar_this]
     }
     
+    # if we have composition
     if (yvar=="_composition")
     {
       confusion = confusionMatrix(factor(as.numeric(as.matrix(values_predicted)),levels=c(0,1)),factor(as.numeric(as.matrix(values_observed)),levels=c(0,1)))
@@ -127,30 +143,14 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
                   obs=values_observed,
                   ba=balanced_accuracy))
     }
-    else
+    else # if we have abundance
     {
-      results = data.frame(pred = as.numeric(as.matrix(values_predicted)), obs = as.numeric(as.matrix(values_observed)))
-      
-      m_lm = NULL
-      try(m_lm <- lm(pred~obs,data=results))
-      if (!is.null(m_lm))
-      {
-        intercept = coef(m_lm)[1]
-        slope = coef(m_lm)[2]
-        r2 = summary(m_lm)$r.squared
-      }
-      else
-      {
-        intercept = NA
-        slope = NA
-        r2 = NA
-      }
+      r2 = NA # do a casewise r2
+      try(r2 <- r2_casewise_mean(pred=values_predicted, obs=values_observed))
       
       final_result = list(model=m_rf_multivar,
                           pred=values_predicted,
                           obs=values_observed,
-                          intercept=intercept,
-                          slope=slope,
                           r2=r2)
       
       return(final_result)      

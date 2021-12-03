@@ -5,6 +5,9 @@ library(data.table)
 library(wesanderson)
 library(tibble)
 library(ggpubr)
+library(lme4)
+library(visreg)
+library(MuMIn)
 
 try(dir.create('outputs_figures'))
 
@@ -55,31 +58,94 @@ row_counts_trimmed = sapply(fns, function(x) {
   })
 num_nas = row_counts - row_counts_trimmed
 
-# calculate stats
-df_all_stats = df_all %>% 
-  select(name,num_species, num_replicates_in_data) %>%
+# add some additional info
+df_all = df_all %>% 
   mutate(nice_name = nice_names[name]) %>%
-  unique %>%
   mutate(deterministic=name %in% c("mouse_gut","human_gut","glv_simulated")) %>%
   mutate(empirical=name %in% c("cedar_creek_plants","fly_gut","soil_bacteria")) %>%
   mutate(num_na = num_nas[name]) %>%
-  mutate(num_states = row_counts[name]) %>%
+  mutate(num_states = row_counts[name])
+
+# calculate stats
+df_all_stats = df_all %>%
   select(name, nice_name, deterministic, empirical, n=num_species, q=num_replicates_in_data, num_states=num_states, num_na=num_na) %>%
+  unique %>%
   arrange(nice_name)
-
-
 write.csv(df_all_stats %>% select(-name),'outputs_figures/table_dataset_stats.csv',row.names=F)
+
+
 
 # get nice names
 nn = df_all_stats$nice_name
 names(nn) = df_all_stats$name
 
 
+varnames_nice = c(sampling_strategy='Sampling strategy',
+                  num_train='Number of training cases',
+                  num_species='Number of species',
+                  deterministic='Data from deterministic model',
+                  empirical='Data from empirical study')
 
+plot_visreg_perf <- function(yvar,ylab)
+{
+  # do regression analysis of performance
+  df_perf_001_e2e = df_all %>% 
+    group_by(name, sampling_strategy, method, rep) %>% 
+    filter(frac > 1e-2 & method=="e2e") %>% 
+    arrange(frac) %>% 
+    top_n(1) %>%
+    ungroup %>%
+    mutate(deterministic=factor(deterministic),
+           empirical=factor(empirical))
+  
+  if (yvar=="feasible.and.stable.balanced_accuracy")
+  {
+    m_lmer = lmer(formula = formula(sprintf("%s ~ sampling_strategy + num_train + num_species + (1|name)", yvar)), # no rep RE because equal replication 
+                  data=df_perf_001_e2e)
+  } else
+  {
+    m_lmer = lmer(formula = formula(sprintf("%s ~ sampling_strategy + num_train + num_species + deterministic + empirical + (1|name)", yvar)), # no rep RE because equal replication 
+                                data=df_perf_001_e2e)
+  }
 
+  
+  plots_lmer = vector(mode="list",length=length(varnames_nice))
+  for (i in 1:length(varnames_nice))
+  {
+    try(plots_lmer[[i]] <- visreg(m_lmer, xvar=names(varnames_nice)[i], gg=TRUE) +
+      xlab(varnames_nice[i]) +
+      theme_bw() +
+      theme(axis.text.x = element_text(
+        angle = 45, hjust=1)) +
+      ylab(ylab) +
+      ylim(0,1))
+  }
+  plots_arranged = ggarrange(plotlist=plots_lmer)
+  r2 = r.squaredGLMM(m_lmer)
+  
+  return(list(plots=plots_arranged, r2=data.frame(yvar=yvar,r2), model=m_lmer))
+}
 
+vrp_richness = plot_visreg_perf("richness.r2",expression(paste(R^2, " of abundance prediction")))
+vrp_abundance = plot_visreg_perf("abundance.r2",expression(paste(R^2, " of abundance prediction")))
+vrp_composition = plot_visreg_perf("composition.balanced_accuracy","Balanced accuracy of\nabundance prediction")
+vrp_fs = plot_visreg_perf("feasible.and.stable.balanced_accuracy","Balanced accuracy of\nabundance prediction")
 
+ggsave(vrp_richness$plots,file='outputs_figures/g_lmer_richness.png',width=8,height=5)
+ggsave(vrp_abundance$plots,file='outputs_figures/g_lmer_abundance.png',width=8,height=5)
+ggsave(vrp_composition$plots,file='outputs_figures/g_lmer_composition.png',width=8,height=5)
+ggsave(vrp_fs$plots,file='outputs_figures/g_lmer_fs.png',width=8,height=5)
 
+r2_lmer = rbind(vrp_richness$r2,
+  vrp_abundance$r2,
+  vrp_composition$r2,
+  vrp_fs$r2) %>%
+  as.data.frame %>%
+  reshape2::melt(id.vars="yvar") %>%
+  arrange(yvar, variable)
+
+write.csv(r2_lmer, file='outputs_figures/table_r2.csv', row.names=FALSE)
+#ggplot(r2_lmer,aes(x=yvar,y=value,fill=variable)) + geom_bar(stat='identity',position='dodge') + ylim(0,1) + theme_bw()
 
 
 make_plot_performance <- function(data,yvar,ylab)

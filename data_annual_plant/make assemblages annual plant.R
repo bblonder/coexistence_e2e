@@ -57,7 +57,7 @@ assign_params <- function(assemblage, params)
   return(list(vital= vital_this,alpha= alpha_this))
 }
 
-do_simulation_annual_plant <- function(vital, alpha, nstep=200)
+do_simulation_annual_plant <- function(vital, alpha, nstep=1000)
 {
   nsp = nrow(vital)
   
