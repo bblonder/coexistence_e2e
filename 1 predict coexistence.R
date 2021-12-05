@@ -159,7 +159,7 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
       try(r2 <- r2_casewise_mean(pred=values_predicted, obs=values_observed))
       
       #plot(as.numeric(as.matrix(values_predicted)), as.numeric(as.matrix(values_observed))) # DEBUG
-      abline(0,1,col='red')
+      #abline(0,1,col='red') # DEBUG
       
       final_result = list(model=m_rf_multivar,
                           pred=values_predicted,
