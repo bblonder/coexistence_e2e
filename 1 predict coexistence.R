@@ -8,43 +8,38 @@ library(parallel)
 library(data.table)
 library(reshape)
 
-# KEY SETUP
-dir.create("outputs_statistical")
-CORES = 16 # number of cores to parallel process on
-REPLICATES = 5
-GRID_POINTS = 20
-# END
+# DECIDE RUN MODE
+DEBUG_MODE = FALSE
 
-
-freq_weight <- function(x)
+# SETUP OUTPUT DIRECTORY
+if (!file.exists("outputs_statistical"))
 {
-  x_cut = cut(x, breaks=10)
-  w = 1/table(x_cut)
-  w = as.numeric(w)
-  w[!is.finite(w)] = NA
-  w <- w/sum(w,na.rm=T)
-  names(w) = levels(x_cut)
-  
-  weights_by_x = as.numeric(w[x_cut])
-  
-  return(weights_by_x)
+  dir.create("outputs_statistical")
 }
 
-r2_casewise_mean <- function(pred, obs)
+# LOAD HELPERS
+source('freq_weight.R')
+source('casewise.R')
+source('lseq.R')
+source('quantile_trim.R')
+
+# KEY PARAMETERS
+if (DEBUG_MODE==TRUE)
 {
-  stopifnot(nrow(pred) == nrow(obs))
-  stopifnot(ncol(pred) == ncol(obs))
-  
-  r2_all = sapply(1:nrow(pred), function(i) {
-    df_this_assemblage = data.frame(pred=as.numeric(pred[i,,drop=TRUE]), obs=as.numeric(obs[i,,drop=TRUE]))
-    
-    r2 = summary(lm(pred~obs,data=df_this_assemblage))$r.squared
-  })
-  
-  r2_mean = mean(r2_all, na.rm=T)
-  return(r2_mean)
+  CORES = 1#16 # number of cores to parallel process on
+  REPLICATES = 1#5
+  GRID_POINTS = 3#11
+  MIN_FRAC = 1e-5#1e-5
+} else
+{
+  CORES = 16 # number of cores to parallel process on
+  REPLICATES = 5
+  GRID_POINTS = 11
+  MIN_FRAC = 1e-5  
 }
 
+
+###### MAIN FUNCTIONS
 predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
 {
   print(yvar) # DEBUG
@@ -78,9 +73,27 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
         data_for_rf_training[,var] = factor(data_for_rf_training[,var],levels=c(FALSE,TRUE))
       }
     }
-    else
+    else # if we have abundance
     {
-      # otherwise leave as abundance
+      # convert the abundances to 
+      ### BB 
+      numeric_vals = data_for_rf_training[,yvar_this] %>% as.matrix %>% as.numeric
+      quantiles = quantile(numeric_vals[numeric_vals>0], seq(0,1,length.out=(10-2)), na.rm=TRUE) # assume ten total classes
+      maxval = max(numeric_vals, na.rm=TRUE)
+      if (maxval==0)
+      {
+        maxval=1e-16 # a hack to get the breaks to work below
+      }
+      
+      data_for_rf_training[,yvar_this] = data_for_rf_training[,yvar_this] %>% 
+        mutate(across(everything(), function(x) {
+          breaks = na.omit(as.numeric(unique(c(0, quantiles, maxval))))
+          bin_means = (head(breaks,-1) + tail(breaks,-1))/2
+          bin_means[1] = 0
+          #print(bin_means) ### DEBUG
+          return(cut(x, breaks=breaks,right=TRUE,include.lowest=TRUE,labels=bin_means))
+        }
+        ))
     }
     
     if (method %in% c('e2e','e2e + reshuffle'))
@@ -98,10 +111,11 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
       {
         values_predicted = as.data.frame(sapply(values_predicted_raw$classOutput, function(x) {as.logical(x$class)}))
       }
-      else
+      else # if abundance
       {
-        values_predicted = as.data.frame(sapply(values_predicted_raw$regrOutput, function(x) {x$predicted}))
-        
+        # convert the class predictions back to numeric values
+        values_predicted = as.data.frame(sapply(values_predicted_raw$classOutput, function(x) {x$class}))
+        values_predicted = values_predicted %>% mutate(across(everything(), function(x) {as.numeric(as.character(x))}))
       }
     }
     else if (method=='naive')
@@ -123,7 +137,7 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
     {
       values_observed = assemblages[rows_test,yvar_this] > 0
     }
-    else
+    else # if abundance
     {
       values_observed = assemblages[rows_test,yvar_this]
     }
@@ -131,12 +145,8 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
     # if we have composition
     if (yvar=="_composition")
     {
-      confusion = confusionMatrix(factor(as.numeric(as.matrix(values_predicted)),levels=c(0,1)),factor(as.numeric(as.matrix(values_observed)),levels=c(0,1)))
-      
-      balanced_accuracy = confusion$byClass["Balanced Accuracy"]
-      
-      results = data.frame(pred = as.numeric(as.matrix(values_predicted)), obs = as.numeric(as.matrix(values_observed)))
-      
+      balanced_accuracy = NA # do a casewise analysis
+      try(balanced_accuracy <- balanced_accuracy_casewise_mean(pred=values_predicted, obs=values_observed))
       
       return(list(model=m_rf_multivar,
                   pred=values_predicted,
@@ -145,8 +155,11 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
     }
     else # if we have abundance
     {
-      r2 = NA # do a casewise r2
+      r2 = NA # do a casewise analysis
       try(r2 <- r2_casewise_mean(pred=values_predicted, obs=values_observed))
+      
+      #plot(as.numeric(as.matrix(values_predicted)), as.numeric(as.matrix(values_observed))) # DEBUG
+      abline(0,1,col='red')
       
       final_result = list(model=m_rf_multivar,
                           pred=values_predicted,
@@ -202,7 +215,7 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
     
     if(is.factor(assemblages[,yvar]))
     {
-      confusion = confusionMatrix(factor(results$pred,levels=c(1,2)), factor(results$obs,levels=c(1,2)))
+      confusion = confusionMatrix(factor(results$pred,levels=c(FALSE,TRUE)), factor(results$obs,levels=c(FALSE,TRUE)))
       
       balanced_accuracy = confusion$byClass["Balanced Accuracy"]
       
@@ -218,34 +231,20 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
       try(m_lm <- lm(pred~obs,data=results))
       if (!is.null(m_lm))
       {
-        intercept = coef(m_lm)[1]
-        slope = coef(m_lm)[2]
-        r2 = summary(m_lm)$r.squared
+        suppressWarnings(r2 <- summary(m_lm)$r.squared) # disable warnings for the perfect fits this may generate
       }
       else
       {
-        intercept = NA
-        slope = NA
         r2 = NA
       }
       return(list(model=m_rf_1var,
                   pred=values_predicted,
                   obs=values_observed,
-                  intercept=intercept,
-                  slope=slope,
                   r2=r2))
     }
   }
 }
 
-lseq <- function(from, to, length.out) {
-  # logarithmic spaced sequence
-  # blatantly stolen from library("emdbook"), because need only this
-  exp(seq(log(from), log(to), length.out = length.out))
-}
-
-
-source('quantile_trim.R')
 
 
 
@@ -254,7 +253,7 @@ do_predictions <- function(input_file,fn,
                            num_replicates_in_data = 1, 
                            num_replicates_in_rf=REPLICATES,
                            num_grid_points=GRID_POINTS,
-                           min_frac = 1e-5)
+                           min_frac = MIN_FRAC)
 {
   data = input_file %>%
     mutate(feasible.and.stable = factor(stable & feasible)) %>%
@@ -381,8 +380,8 @@ do_predictions <- function(input_file,fn,
     if (!is.null(prediction_composition))
     {
       results_table$composition.balanced_accuracy[i]=prediction_composition$ba
-      #write.csv(prediction_composition$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_composition_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
-      #write.csv(prediction_composition$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_composition_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+      write.csv(prediction_composition$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_composition_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+      write.csv(prediction_composition$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_composition_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
     }
     #print(results_table[i,,drop=FALSE]) # DEBUG
     
@@ -394,8 +393,8 @@ do_predictions <- function(input_file,fn,
     if (!is.null(prediction_richness))
     {
       results_table$richness.r2[i]=prediction_richness$r2
-      #write.csv(prediction_richness$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_richness_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
-      #write.csv(prediction_richness$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_richness_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+      write.csv(prediction_richness$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_richness_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+      write.csv(prediction_richness$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_richness_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
     }
     #print(results_table[i,,drop=FALSE]) # DEBUG
     
@@ -414,8 +413,8 @@ do_predictions <- function(input_file,fn,
     if (!is.null(prediction_fs))
     {
       results_table$feasible.and.stable.balanced_accuracy[i]=prediction_fs$ba
-      #write.csv(prediction_fs$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_fs_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
-      #write.csv(prediction_fs$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_fs_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+      write.csv(prediction_fs$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_fs_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
+      write.csv(prediction_fs$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_fs_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
     }
     #print(results_table[i,,drop=FALSE]) # DEBUG
     
@@ -452,14 +451,10 @@ do_predictions <- function(input_file,fn,
 
 
 
+########################
+# DO ANALYSES
 
-# do analyses
 
-data_assemblages_cedar_creek_18 = read.csv('data_cedar_creek/cedar_creek_2018.csv')
-do_predictions(data_assemblages_cedar_creek_18,
-               fn = 'cedar_creek_plants',
-               num_species = 18,
-               num_replicates_in_data = 1)
 
 data_sortie_9_3 = read.csv('data_sortie/data_sortie.csv')
 do_predictions(data_sortie_9_3,
@@ -505,3 +500,9 @@ do_predictions(data_soil_bacteria_8,
                fn = 'soil_bacteria',
                num_species = 8, 
                num_replicates_in_data = 2) # this is an underestimate but should not cause problems
+
+data_assemblages_cedar_creek_18 = read.csv('data_cedar_creek/cedar_creek_2018.csv')
+do_predictions(data_assemblages_cedar_creek_18,
+               fn = 'cedar_creek_plants',
+               num_species = 18,
+               num_replicates_in_data = 1)

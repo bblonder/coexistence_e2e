@@ -75,10 +75,6 @@ write.csv(df_all_stats %>% select(-name),'outputs_figures/table_dataset_stats.cs
 
 
 
-# get nice names
-nn = df_all_stats$nice_name
-names(nn) = df_all_stats$name
-
 
 varnames_nice = c(sampling_strategy='Sampling strategy',
                   num_train='Number of training cases',
@@ -126,8 +122,8 @@ plot_visreg_perf <- function(yvar,ylab)
   return(list(plots=plots_arranged, r2=data.frame(yvar=yvar,r2), model=m_lmer))
 }
 
-vrp_richness = plot_visreg_perf("richness.r2",expression(paste(R^2, " of abundance prediction")))
-vrp_abundance = plot_visreg_perf("abundance.r2",expression(paste(R^2, " of abundance prediction")))
+vrp_richness = plot_visreg_perf("richness.r2",expression("Mean ", paste(R^2, " of abundance prediction")))
+vrp_abundance = plot_visreg_perf("abundance.r2",expression("Mean ", paste(R^2, " of abundance prediction")))
 vrp_composition = plot_visreg_perf("composition.balanced_accuracy","Balanced accuracy of\nabundance prediction")
 vrp_fs = plot_visreg_perf("feasible.and.stable.balanced_accuracy","Balanced accuracy of\nabundance prediction")
 
@@ -157,7 +153,7 @@ make_plot_performance <- function(data,yvar,ylab)
          aes_string(x="frac",y=yvar,col="method")) +
     geom_point(alpha=0.5) +
     facet_grid(name~sampling_strategy,switch='x',
-               labeller=labeller(name=nn)) +
+               labeller=labeller(name=nice_names)) +
     theme_bw() +
     ylim(0,1) +
     scale_x_log10(limits=c(1e-4,1e0),labels = function(x) format(x, scientific = TRUE)) +
@@ -167,8 +163,9 @@ make_plot_performance <- function(data,yvar,ylab)
     theme(legend.position='bottom') +
     scale_color_manual(values=wes_palette("Darjeeling1")) +
     #geom_vline(mapping=aes(xintercept = x.cutoff), data=df_all_cutoff) +
-    annotation_logticks(color='gray',alpha=0.5) +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+    #annotation_logticks(color='gray',alpha=0.5) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 }
 
 
@@ -179,7 +176,7 @@ make_plot_performance <- function(data,yvar,ylab)
 
 g_performance_abundance = make_plot_performance(data=df_all,
                         yvar="abundance.r2", 
-                        ylab=expression(paste(R^2, " of abundance prediction")))
+                        ylab=expression(paste("Mean ", R^2, " of abundance prediction")))
 ggsave(g_performance_abundance, file='outputs_figures/g_performance_abundance.png',width=8,height=9)
 
 
@@ -230,7 +227,7 @@ plot_obs_pred_scatter <- function(list_data)
     xlab("Observed abundance") + 
     ylab("Predicted abundance") +
     stat_smooth(method='lm') +
-    ggtitle(nn[name]) +
+    ggtitle(nice_names[name]) +
     #ggtitle(bquote(beta ~ "=" ~ .(frac))) +
     coord_fixed() +
     xlim(minval, maxval) + 
@@ -259,8 +256,6 @@ pick_datasets <- function(df, name, fraction, method, sampling_strategy)
   
   ids = grep(pattern=sprintf('sampling_strategy=%s',sampling_strategy),possible_files)
   possible_files = possible_files[ids]
-  
-  print(possible_files)
   
   if(length(possible_files)==2)
   {
