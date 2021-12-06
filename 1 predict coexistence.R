@@ -7,6 +7,7 @@ library(randomForestSRC)
 library(parallel)
 library(data.table)
 library(reshape)
+library(e1071)
 
 # DECIDE RUN MODE
 DEBUG_MODE = FALSE
@@ -28,8 +29,8 @@ if (DEBUG_MODE==TRUE)
 {
   CORES = 1#16 # number of cores to parallel process on
   REPLICATES = 1#5
-  GRID_POINTS = 3#11
-  MIN_FRAC = 1e-5#1e-5
+  GRID_POINTS = 1#11
+  MIN_FRAC = 1e-2#1e-5
 } else
 {
   CORES = 16 # number of cores to parallel process on
@@ -184,7 +185,7 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
                          case.weights = case_weights,
                          verbose=TRUE)
       
-      values_predicted = as.numeric(predict(m_rf_1var, data=assemblages[rows_test,])$predictions)
+      values_predicted = predict(m_rf_1var, data=assemblages[rows_test,])$predictions
       
     }
     else if (method=='naive') # naive approach
@@ -192,7 +193,7 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
       if (is.factor(data_for_rf_training[,yvar]))
       {
         # randomly sample values of the factor from the training data
-        values_predicted = sample(x = as.numeric(data_for_rf_training[,yvar]),size = length(rows_test),replace = TRUE)
+        values_predicted = sample(x = data_for_rf_training[,yvar],size = length(rows_test),replace = TRUE)
       }
       else
       {
@@ -209,7 +210,7 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
       m_rf_1var = NULL
     }
     
-    values_observed = as.numeric(assemblages[rows_test,yvar])
+    values_observed = assemblages[rows_test,yvar]
     
     results = data.frame(pred=values_predicted, obs=values_observed)
     
@@ -299,13 +300,17 @@ do_predictions <- function(input_file,fn,
                               num_train=NA,
                               num_species=NA,
                               num_replicates_in_data=NA,
-                              num_cases=NA
+                              num_cases=NA,
+                              richness_initial_mean=NA,
+                              richness_final_mean=NA,
+                              abundance_final_skewness_mean=NA,
+                              abundance_final_skewness_nonzero_mean=NA
   )
   
   results_list = mclapply(1:nrow(results_table), function(i) # DEBUG #lapply(1:nrow(results_table), function(i)#
   {
     #cat('.')
-    print(cbind(file=fn, i=i, fraction_finished=i/nrow(results_table), results_table[i,])) #DEBUG
+    print(data.frame(file=fn, i=i, fraction_finished=i/nrow(results_table))) #DEBUG
 
     if (results_table$sampling_strategy[i]=="mixed")
     {
@@ -425,7 +430,11 @@ do_predictions <- function(input_file,fn,
     results_table$num_replicates_in_data[i] = num_replicates_in_data
     results_table$num_cases[i] = nrow(data)
     
-    
+    results_table$richness_initial_mean[i] = mean(apply(data[rows_train,1:num_species],1,sum))
+    results_table$richness_final_mean[i] = mean(apply(data[rows_train,names(data)[grep("star",names(data))] ] > 0,1,sum))
+    values_abundance = as.numeric(as.matrix(prediction_abundance$obs))
+    results_table$abundance_final_skewness_mean[i] = skewness(values_abundance, na.rm=TRUE)
+    results_table$abundance_final_skewness_nonzero_mean[i] = skewness(values_abundance[values_abundance>0], na.rm=TRUE)
     
 
     #write.csv(results_table[i,,drop=FALSE],file=sprintf('temp_%s_%d.csv',fn,i),row.names=FALSE) # DEBUG
@@ -453,56 +462,56 @@ do_predictions <- function(input_file,fn,
 
 ########################
 # DO ANALYSES
-
-
-
-data_sortie_9_3 = read.csv('data_sortie/data_sortie.csv')
-do_predictions(data_sortie_9_3,
-               fn = 'sortie-nd_plants',
-               num_species = 9,
-               num_replicates_in_data = 3)
-
-data_assemblages_H_12 = read.csv('data_glv/assemblages_H_12.csv')
-do_predictions(data_assemblages_H_12,
-               'human_gut',
-               num_species = 12,
-               num_replicates_in_data = 1)
-
 data_assemblages_M_11 = read.csv('data_glv/assemblages_M_11.csv')
 do_predictions(data_assemblages_M_11,
                fn = 'mouse_gut',
                num_species = 11,
                num_replicates_in_data = 1)
 
-data_assemblages_glv_16 = read.csv('data_glv/assemblages_glv_16.csv')
-data_assemblages_glv_16 = data_assemblages_glv_16 %>% sample_n(2^14)
-do_predictions(data_assemblages_glv_16,
-               fn = 'glv_simulated',
-               num_species = 16,
-               num_replicates_in_data = 1)
+if (DEBUG_MODE==FALSE)
+{
+  data_assemblages_H_12 = read.csv('data_glv/assemblages_H_12.csv')
+  do_predictions(data_assemblages_H_12,
+                 'human_gut',
+                 num_species = 12,
+                 num_replicates_in_data = 1)
+  
+  data_assemblages_glv_16 = read.csv('data_glv/assemblages_glv_16.csv')
+  data_assemblages_glv_16 = data_assemblages_glv_16 %>% sample_n(2^14)
+  do_predictions(data_assemblages_glv_16,
+                 fn = 'glv_simulated',
+                 num_species = 16,
+                 num_replicates_in_data = 1)
+  
+  data_annual_plant_18 = read.csv('data_annual_plant/assemblages_annual_plant_18.csv') %>%
+    mutate(stable=replace(stable, is.na(stable), 1)) # as there is one missing case (the all zeros case)
+  data_annual_plant_18 = data_annual_plant_18 %>% sample_n(2^14)
+  do_predictions(data_annual_plant_18,
+                 fn = 'annual_plant',
+                 num_species = 18,
+                 num_replicates_in_data = 1)
 
-data_annual_plant_18 = read.csv('data_annual_plant/assemblages_annual_plant_18.csv') %>%
-  mutate(stable=replace(stable, is.na(stable), 1)) # as there is one missing case (the all zeros case)
-data_annual_plant_18 = data_annual_plant_18 %>% sample_n(2^14)
-do_predictions(data_annual_plant_18,
-               fn = 'annual_plant',
-               num_species = 18,
-               num_replicates_in_data = 1)
-
-data_fly_5 = read.csv('data_fly/data_fly.csv')
-do_predictions(data_fly_5,
-               fn = 'fly_gut',
-               num_species = 5,
-               num_replicates_in_data = 48)
-
-data_soil_bacteria_8 = read.csv('data_friedman_gore/data_friedman_gore.csv')
-do_predictions(data_soil_bacteria_8,
-               fn = 'soil_bacteria',
-               num_species = 8, 
-               num_replicates_in_data = 2) # this is an underestimate but should not cause problems
-
-data_assemblages_cedar_creek_18 = read.csv('data_cedar_creek/cedar_creek_2018.csv')
-do_predictions(data_assemblages_cedar_creek_18,
-               fn = 'cedar_creek_plants',
-               num_species = 18,
-               num_replicates_in_data = 1)
+  data_sortie_9_3 = read.csv('data_sortie/data_sortie.csv')
+  do_predictions(data_sortie_9_3,
+                 fn = 'sortie-nd_plants',
+                 num_species = 9,
+                 num_replicates_in_data = 3)
+  
+  data_fly_5 = read.csv('data_fly/data_fly.csv')
+  do_predictions(data_fly_5,
+                 fn = 'fly_gut',
+                 num_species = 5,
+                 num_replicates_in_data = 48)
+  
+  data_soil_bacteria_8 = read.csv('data_friedman_gore/data_friedman_gore.csv')
+  do_predictions(data_soil_bacteria_8,
+                 fn = 'soil_bacteria',
+                 num_species = 8, 
+                 num_replicates_in_data = 2) # this is an underestimate but should not cause problems
+  
+  data_assemblages_cedar_creek_18 = read.csv('data_cedar_creek/cedar_creek_2018.csv')
+  do_predictions(data_assemblages_cedar_creek_18,
+                 fn = 'cedar_creek_plants',
+                 num_species = 18,
+                 num_replicates_in_data = 1)
+}

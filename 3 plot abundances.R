@@ -38,7 +38,7 @@ plot_data <- function(data,name)
   
   g_out = ggplot(data_out, aes(x=variable,y=row,fill=value)) + 
     geom_raster() +
-    scale_fill_gradient2(name='Abundance') +
+    scale_fill_gradient(name='Abundance',low='white',high='blueviolet',na.value='red') +
     theme_bw() +
     xlab('Species') +
     ylab('Assemblage') +

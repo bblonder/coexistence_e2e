@@ -9,7 +9,10 @@ library(lme4)
 library(visreg)
 library(MuMIn)
 
-try(dir.create('outputs_figures'))
+if (!file.exists('outputs_figures'))
+{
+  dir.create('outputs_figures')
+}
 
 fn_outputs = dir('outputs_statistical',pattern="results*",full.names = TRUE)
 
@@ -47,6 +50,16 @@ fns = c(`cedar_creek_plants`='data_cedar_creek/cedar_creek_2018.csv',
         `fly_gut`='data_fly/data_fly.csv',
         `soil_bacteria`='data_friedman_gore/data_friedman_gore.csv')
 
+skewness = do.call("rbind",lapply(fns, function(x) {
+  df = read.csv(x)
+  df = df %>% select(contains("star"))
+  df_numeric = df %>% as.matrix %>% as.numeric
+  frac_zeros = length(df_numeric[df_numeric==0]) / length(df_numeric)
+  skewness = e1071::skewness(df_numeric[df_numeric!=0])
+  return(data.frame(frac_zeros, skewness))
+  }))
+skewness$name = names(fns)
+
 row_counts = sapply(fns, function(x) {nrow(read.csv(x))})
 row_counts_trimmed = sapply(fns, function(x) {
   q = quantile_trim(read.csv(x))
@@ -64,11 +77,12 @@ df_all = df_all %>%
   mutate(deterministic=name %in% c("mouse_gut","human_gut","glv_simulated")) %>%
   mutate(empirical=name %in% c("cedar_creek_plants","fly_gut","soil_bacteria")) %>%
   mutate(num_na = num_nas[name]) %>%
-  mutate(num_states = row_counts[name])
+  mutate(num_states = row_counts[name]) %>%
+  left_join(skewness,by='name')
 
 # calculate stats
 df_all_stats = df_all %>%
-  select(name, nice_name, deterministic, empirical, n=num_species, q=num_replicates_in_data, num_states=num_states, num_na=num_na) %>%
+  select(name, nice_name, deterministic, empirical, n=num_species, q=num_replicates_in_data, num_states=num_states, num_na=num_na, frac_zeros, skewness) %>%
   unique %>%
   arrange(nice_name)
 write.csv(df_all_stats %>% select(-name),'outputs_figures/table_dataset_stats.csv',row.names=F)
@@ -79,28 +93,30 @@ write.csv(df_all_stats %>% select(-name),'outputs_figures/table_dataset_stats.cs
 varnames_nice = c(sampling_strategy='Sampling strategy',
                   num_train='Number of training cases',
                   num_species='Number of species',
-                  deterministic='Data from deterministic model',
-                  empirical='Data from empirical study')
+                  empirical='Data from empirical study',
+                  frac_zeros='Fraction of absences',
+                  skewness='Skewness of abundance')
 
 plot_visreg_perf <- function(yvar,ylab)
 {
   # do regression analysis of performance
   df_perf_001_e2e = df_all %>% 
     group_by(name, sampling_strategy, method, rep) %>% 
-    filter(frac > 1e-2 & method=="e2e") %>% 
+    filter(frac == 1e-2 & method=="e2e") %>% 
     arrange(frac) %>% 
     top_n(1) %>%
     ungroup %>%
     mutate(deterministic=factor(deterministic),
-           empirical=factor(empirical))
+           empirical=factor(empirical)) %>%
+    mutate(num_cases = num_cases/1000)
   
   if (yvar=="feasible.and.stable.balanced_accuracy")
   {
-    m_lmer = lmer(formula = formula(sprintf("%s ~ sampling_strategy + num_train + num_species + (1|name)", yvar)), # no rep RE because equal replication 
+    m_lmer = lmer(formula = formula(sprintf("%s ~ sampling_strategy + num_train + num_species + skewness + frac_zeros + (1|name)", yvar)), # no rep RE because equal replication 
                   data=df_perf_001_e2e)
   } else
   {
-    m_lmer = lmer(formula = formula(sprintf("%s ~ sampling_strategy + num_train + num_species + deterministic + empirical + (1|name)", yvar)), # no rep RE because equal replication 
+    m_lmer = lmer(formula = formula(sprintf("%s ~ sampling_strategy + num_train + num_species + skewness + frac_zeros + empirical + (1|name)", yvar)), # no rep RE because equal replication 
                                 data=df_perf_001_e2e)
   }
 
@@ -108,7 +124,7 @@ plot_visreg_perf <- function(yvar,ylab)
   plots_lmer = vector(mode="list",length=length(varnames_nice))
   for (i in 1:length(varnames_nice))
   {
-    try(plots_lmer[[i]] <- visreg(m_lmer, xvar=names(varnames_nice)[i], gg=TRUE) +
+    try(plots_lmer[[i]] <- visreg(m_lmer, xvar=names(varnames_nice)[i],by='name', overlay=TRUE, gg=TRUE) +
       xlab(varnames_nice[i]) +
       theme_bw() +
       theme(axis.text.x = element_text(
@@ -116,7 +132,7 @@ plot_visreg_perf <- function(yvar,ylab)
       ylab(ylab) +
       ylim(0,1))
   }
-  plots_arranged = ggarrange(plotlist=plots_lmer)
+  plots_arranged = ggarrange(plotlist=plots_lmer,common.legend = TRUE,arrange='hv')
   r2 = r.squaredGLMM(m_lmer)
   
   return(list(plots=plots_arranged, r2=data.frame(yvar=yvar,r2), model=m_lmer))
@@ -183,17 +199,17 @@ ggsave(g_performance_abundance, file='outputs_figures/g_performance_abundance.pn
 g_performance_composition = make_plot_performance(data=df_all,
                         yvar="composition.balanced_accuracy", 
                         ylab="Balanced accuracy of composition prediction")
-ggsave(g_performance_composition, file='outputs_figures/g_performance_composition.png',width=8,height=8)
+ggsave(g_performance_composition, file='outputs_figures/g_performance_composition.png',width=8,height=9)
 
 g_performance_fs = make_plot_performance(data=df_all,
                       yvar="feasible.and.stable.balanced_accuracy",
                       ylab="Balanced accuracy of feasibility+stability prediction")
-ggsave(g_performance_fs, file='outputs_figures/g_performance_fs.png',width=8,height=8)
+ggsave(g_performance_fs, file='outputs_figures/g_performance_fs.png',width=8,height=9)
 
 g_performance_richness = make_plot_performance(data=df_all,
                        yvar="richness.r2",
                        ylab=expression(paste(R^2, " of richness prediction")))
-ggsave(g_performance_richness, file='outputs_figures/g_performance_richness.png',width=8,height=8)
+ggsave(g_performance_richness, file='outputs_figures/g_performance_richness.png',width=8,height=9)
 
 
 
@@ -206,38 +222,47 @@ ggsave(g_performance_richness, file='outputs_figures/g_performance_richness.png'
 
 plot_obs_pred_scatter <- function(list_data)
 {
+  print(list_data)
   obs = read.csv(list_data$fn_obs) %>% 
-    as.matrix %>% 
-    as.numeric
-  pred = read.csv(list_data$fn_pred) %>% as.matrix %>% as.numeric
+    as.matrix
+  pred = read.csv(list_data$fn_pred) %>% 
+    as.matrix
+  
+  stopifnot(nrow(obs)==nrow(pred))
+  stopifnot(ncol(obs)==ncol(pred))
+  
+  matrix_all = matrix(data=NA,nrow=nrow(obs)*ncol(obs),ncol=3)
+  matrix_all[,1] = as.numeric(obs)
+  matrix_all[,2] = as.numeric(pred)
+  matrix_all[,3] = sort(rep(1:nrow(obs),ncol(obs)))
+  matrix_all = data.frame(matrix_all)
+  names(matrix_all) = c('obs','pred','row')
   
   frac = list_data$best_frac
   name = list_data$name
   
-  df = data.frame(obs=obs, pred=pred)
+  allvals = c(as.numeric(obs),as.numeric(pred))
   
-  minval = min(c(obs, pred))
-  maxval = max(c(obs, pred))
+  minval = min(allvals,na.rm=TRUE)
+  maxval = max(allvals,na.rm=TRUE)
   
-  g = ggplot(data = df, aes(x = obs, y = pred)) +
-    theme_bw() + 
-    geom_hex(aes(fill = stat(log10(count)))) +
-    scale_fill_gradient(low="lightgray",high="darkorchid") +
+  g = ggplot(matrix_all,aes(x=obs,y=pred,group=row)) +
+    #geom_point() +
+    theme_bw() +
     scale_x_continuous(labels = function(x) format(x, scientific = TRUE)) +
     xlab("Observed abundance") + 
     ylab("Predicted abundance") +
-    stat_smooth(method='lm') +
     ggtitle(nice_names[name]) +
-    #ggtitle(bquote(beta ~ "=" ~ .(frac))) +
     coord_fixed() +
     xlim(minval, maxval) + 
-    ylim(minval, maxval)
+    ylim(minval, maxval) +
+    geom_line(stat='smooth',method='lm',se=FALSE,alpha=0.1,color='purple4')
   
   return(g)
 }
 
 
-pick_datasets <- function(df, name, fraction, method, sampling_strategy)
+pick_datasets <- function(df, name, fraction, method, sampling_strategy, response_variable)
 {
   best_frac = df %>%
     filter(name==name & frac >= fraction & method==method & sampling_strategy==sampling_strategy) %>%
@@ -255,6 +280,9 @@ pick_datasets <- function(df, name, fraction, method, sampling_strategy)
   possible_files = possible_files[ids]
   
   ids = grep(pattern=sprintf('sampling_strategy=%s',sampling_strategy),possible_files)
+  possible_files = possible_files[ids]
+  
+  ids = grep(pattern=sprintf('%s',response_variable),possible_files)
   possible_files = possible_files[ids]
   
   if(length(possible_files)==2)
@@ -276,7 +304,7 @@ pick_datasets <- function(df, name, fraction, method, sampling_strategy)
 
 plot_scatter_dataset <- function(name)
 {
-  l_this = pick_datasets(df_all, name=name, fraction=1e-2, method='e2e', sampling_strategy='mixed')
+  l_this = pick_datasets(df_all, name=name, fraction=1e-1, method='e2e', sampling_strategy='mixed', response_variable='abundance')
   if (!is.null(l_this))
   {
     p = plot_obs_pred_scatter(l_this)
