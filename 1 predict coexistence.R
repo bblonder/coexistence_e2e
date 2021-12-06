@@ -10,7 +10,7 @@ library(reshape)
 library(e1071)
 
 # DECIDE RUN MODE
-DEBUG_MODE = TRUE
+DEBUG_MODE = FALSE
 
 # SETUP OUTPUT DIRECTORY
 if (!file.exists("outputs_statistical"))
