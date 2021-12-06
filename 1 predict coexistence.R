@@ -10,7 +10,7 @@ library(reshape)
 library(e1071)
 
 # DECIDE RUN MODE
-DEBUG_MODE = FALSE
+DEBUG_MODE = TRUE
 
 # SETUP OUTPUT DIRECTORY
 if (!file.exists("outputs_statistical"))
@@ -20,8 +20,8 @@ if (!file.exists("outputs_statistical"))
 
 # LOAD HELPERS
 source('freq_weight.R')
-source('casewise.R')
-source('lseq.R')
+source('skill_statistics.R')
+source('log_seq.R')
 source('quantile_trim.R')
 
 # KEY PARAMETERS
@@ -34,7 +34,7 @@ if (DEBUG_MODE==TRUE)
 } else
 {
   CORES = 16 # number of cores to parallel process on
-  REPLICATES = 5
+  REPLICATES = 10
   GRID_POINTS = 11
   MIN_FRAC = 1e-5  
 }
@@ -156,8 +156,7 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
     }
     else # if we have abundance
     {
-      r2 = NA # do a casewise analysis
-      try(r2 <- r2_casewise_mean(pred=values_predicted, obs=values_observed))
+      mae_mean = mean_absolute_error_casewise_mean(pred=values_predicted, obs=values_observed)
       
       #plot(as.numeric(as.matrix(values_predicted)), as.numeric(as.matrix(values_observed))) # DEBUG
       #abline(0,1,col='red') # DEBUG
@@ -165,7 +164,7 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
       final_result = list(model=m_rf_multivar,
                           pred=values_predicted,
                           obs=values_observed,
-                          r2=r2)
+                          mae_mean=mae_mean)
       
       return(final_result)      
     }
@@ -214,7 +213,7 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
     
     results = data.frame(pred=values_predicted, obs=values_observed)
     
-    if(is.factor(assemblages[,yvar]))
+    if(is.factor(assemblages[,yvar]) | is.logical(assemblages[,yvar]))
     {
       confusion = confusionMatrix(factor(results$pred,levels=c(FALSE,TRUE)), factor(results$obs,levels=c(FALSE,TRUE)))
       
@@ -228,20 +227,12 @@ predict_rf <- function(yvar, assemblages, rows_train, method, num_species)
     }
     else
     {
-      m_lm = NULL
-      try(m_lm <- lm(pred~obs,data=results))
-      if (!is.null(m_lm))
-      {
-        suppressWarnings(r2 <- summary(m_lm)$r.squared) # disable warnings for the perfect fits this may generate
-      }
-      else
-      {
-        r2 = NA
-      }
+      mae = mean_absolute_error(pred=values_predicted, obs=values_observed)
+
       return(list(model=m_rf_1var,
                   pred=values_predicted,
                   obs=values_observed,
-                  r2=r2))
+                  mae=mae))
     }
   }
 }
@@ -275,7 +266,7 @@ do_predictions <- function(input_file,fn,
   # determine if we have all the possible cases
   dataset_complete = (num_replicates_in_data * 2^num_species == nrow(data))
   
-  seq_all = lseq(min_frac,1,length.out=num_grid_points)
+  seq_all = log_seq(min_frac,1,length.out=num_grid_points)
   
   if(dataset_complete==TRUE)
   {
@@ -290,21 +281,23 @@ do_predictions <- function(input_file,fn,
   results_table = expand.grid(rep=1:num_replicates_in_rf, 
                               method=c('naive','e2e + reshuffle','e2e'),
                               frac=frac_this,
-                              richness.r2=NA,
-                              feasible.and.stable.balanced_accuracy=NA,
-                              composition.balanced_accuracy=NA,
-                              abundance.r2=NA,
+                              richness_mae=NA,
+                              feasible_and_stable_balanced_accuracy=NA,
+                              composition_balanced_accuracy_mean=NA,
+                              abundance_mae_mean=NA,
                               sampling_strategy=c("high-1","high-2","high-3",
                                                   "low-1","low-2","low-3",
                                                   "mixed"),
                               num_train=NA,
-                              num_species=NA,
-                              num_replicates_in_data=NA,
-                              num_cases=NA,
-                              richness_initial_mean=NA,
-                              richness_final_mean=NA,
-                              abundance_final_skewness_mean=NA,
-                              abundance_final_skewness_nonzero_mean=NA
+                              num_species_dataset=NA,
+                              num_replicates_dataset=NA,
+                              num_cases_dataset=NA,
+                              num_losses_mean_train=NA,
+                              abundance_q95_dataset=NA,
+                              abundance_skewness_dataset=NA,
+                              abundance_skewness_nonzero_dataset=NA,
+                              abundance_final_skewness_mean_train=NA,
+                              abundance_final_skewness_nonzero_mean_train=NA
   )
   
   results_list = mclapply(1:nrow(results_table), function(i) # DEBUG #lapply(1:nrow(results_table), function(i)#
@@ -368,7 +361,7 @@ do_predictions <- function(input_file,fn,
 
     if(!is.null(prediction_abundance))
     {
-      results_table$abundance.r2[i]=prediction_abundance$r2
+      results_table$abundance_mae_mean[i]=prediction_abundance$mae_mean
       if (results_table$rep[i]==1) # just to cut down on duplicate outputs
       {
         write.csv(prediction_abundance$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_abundance_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
@@ -384,7 +377,7 @@ do_predictions <- function(input_file,fn,
                                         num_species=num_species)
     if (!is.null(prediction_composition))
     {
-      results_table$composition.balanced_accuracy[i]=prediction_composition$ba
+      results_table$composition_balanced_accuracy_mean[i]=prediction_composition$ba
       write.csv(prediction_composition$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_composition_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
       write.csv(prediction_composition$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_composition_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
     }
@@ -397,7 +390,7 @@ do_predictions <- function(input_file,fn,
                                      num_species=num_species)
     if (!is.null(prediction_richness))
     {
-      results_table$richness.r2[i]=prediction_richness$r2
+      results_table$richness_mae[i]=prediction_richness$mae
       write.csv(prediction_richness$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_richness_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
       write.csv(prediction_richness$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_richness_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
     }
@@ -417,34 +410,40 @@ do_predictions <- function(input_file,fn,
     }
     if (!is.null(prediction_fs))
     {
-      results_table$feasible.and.stable.balanced_accuracy[i]=prediction_fs$ba
+      results_table$feasible_and_stable_balanced_accuracy[i]=prediction_fs$ba
       write.csv(prediction_fs$pred, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_fs_pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
       write.csv(prediction_fs$obs, file=sprintf('outputs_statistical/table_fn=%s_i=%d_method=%s_rep=%d_frac=%f_sampling_strategy=%s_fs_obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$frac[i], results_table$sampling_strategy[i]), row.names=FALSE)
     }
     #print(results_table[i,,drop=FALSE]) # DEBUG
     
-    
     results_table$num_train[i] = n_train
+    results_table$num_species_dataset[i] = num_species
+    results_table$num_replicates_dataset[i] = num_replicates_in_data
+    results_table$num_cases_dataset[i] = nrow(data)
     
-    results_table$num_species[i] = num_species
-    results_table$num_replicates_in_data[i] = num_replicates_in_data
-    results_table$num_cases[i] = nrow(data)
+    # get training set outcomes
+    final_abundances_train = data[rows_train,] %>% select(contains("star")) %>% as.matrix
+    initial_conditions_train = data[rows_train,1:num_species] %>% as.matrix
     
-    results_table$richness_initial_mean[i] = mean(apply(data[rows_train,1:num_species],1,sum))
-    results_table$richness_final_mean[i] = mean(apply(data[rows_train,names(data)[grep("star",names(data))] ] > 0,1,sum))
-    values_abundance = as.numeric(as.matrix(prediction_abundance$obs))
-    results_table$abundance_final_skewness_mean[i] = skewness(values_abundance, na.rm=TRUE)
-    results_table$abundance_final_skewness_nonzero_mean[i] = skewness(values_abundance[values_abundance>0], na.rm=TRUE)
-    
+    # count # of species that were present but went absent
+    results_table$num_losses_mean_train[i] = mean(apply((final_abundances_train==0) & (initial_conditions_train==1), 1, sum, na.rm=TRUE))
 
-    #write.csv(results_table[i,,drop=FALSE],file=sprintf('temp_%s_%d.csv',fn,i),row.names=FALSE) # DEBUG
+    # figure out abundance distribution in training
+    results_table$abundance_final_skewness_mean_train[i] = skewness(as.numeric(final_abundances_train), na.rm=TRUE)
+    results_table$abundance_final_skewness_nonzero_mean_train[i] = skewness(as.numeric(final_abundances_train)[as.numeric(final_abundances_train)>0], na.rm=TRUE)
     
+    # determine the overall dataset 95% abundance quantile
+    abundances_dataset_all = data %>% select(contains("star")) %>% as.matrix %>% as.numeric
+    results_table$abundance_q95_dataset[i] = quantile(abundances_dataset_all, 0.95, na.rm=TRUE)
+
+    # determine overall dataset skewness
+    results_table$abundance_skewness_dataset[i] = skewness(abundances_dataset_all, na.rm=TRUE)
+    results_table$abundance_skewness_nonzero_dataset[i] = skewness(abundances_dataset_all[abundances_dataset_all>0], na.rm=TRUE)
+
     return(results_table[i,,drop=FALSE])
-  }, mc.cores=CORES) # DEBUG
+  }, mc.cores=CORES)
   
-  #saveRDS(results_list, file=sprintf('temp_results_%s.Rdata',fn)) #DEBUG
   results_df = rbindlist(results_list)
-  
   
   # write results table
   write.csv(results_df, file=sprintf('outputs_statistical/results_%s.csv',fn), row.names=FALSE)

@@ -1,9 +1,9 @@
-"nice_name","deterministic","empirical","n","q","num_states","num_na"
-"Annual plant",FALSE,FALSE,18,1,262144,23593
-"Cedar Creek",FALSE,TRUE,18,1,154,14
-"Fly gut",FALSE,TRUE,5,48,1536,36
-"GLV simulated",TRUE,FALSE,16,1,65536,4253
-"Human gut",TRUE,FALSE,12,1,4096,149
-"Mouse gut",TRUE,FALSE,11,1,2048,88
-"Soil bacteria",FALSE,TRUE,8,2,570,23
-"SORTIE-ND",FALSE,FALSE,9,3,1536,69
+"nice_name","n","q","num_states","num_na","empirical"
+"Annual plant",18,1,262144,23593,FALSE
+"Cedar Creek",18,1,154,14,TRUE
+"Fly gut",5,48,1536,36,TRUE
+"GLV simulated",16,1,65536,4253,FALSE
+"Human gut",12,1,4096,149,FALSE
+"Mouse gut",11,1,2048,88,FALSE
+"Soil bacteria",8,2,570,23,TRUE
+"SORTIE-ND",9,3,1536,69,FALSE

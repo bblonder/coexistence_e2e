@@ -50,16 +50,6 @@ fns = c(`cedar_creek_plants`='data_cedar_creek/cedar_creek_2018.csv',
         `fly_gut`='data_fly/data_fly.csv',
         `soil_bacteria`='data_friedman_gore/data_friedman_gore.csv')
 
-skewness = do.call("rbind",lapply(fns, function(x) {
-  df = read.csv(x)
-  df = df %>% select(contains("star"))
-  df_numeric = df %>% as.matrix %>% as.numeric
-  frac_zeros = length(df_numeric[df_numeric==0]) / length(df_numeric)
-  skewness = e1071::skewness(df_numeric[df_numeric!=0])
-  return(data.frame(frac_zeros, skewness))
-  }))
-skewness$name = names(fns)
-
 row_counts = sapply(fns, function(x) {nrow(read.csv(x))})
 row_counts_trimmed = sapply(fns, function(x) {
   q = quantile_trim(read.csv(x))
@@ -77,12 +67,17 @@ df_all = df_all %>%
   mutate(deterministic=name %in% c("mouse_gut","human_gut","glv_simulated")) %>%
   mutate(empirical=name %in% c("cedar_creek_plants","fly_gut","soil_bacteria")) %>%
   mutate(num_na = num_nas[name]) %>%
-  mutate(num_states = row_counts[name]) %>%
-  left_join(skewness,by='name')
+  mutate(num_states = row_counts[name])
 
 # calculate stats
 df_all_stats = df_all %>%
-  select(name, nice_name, deterministic, empirical, n=num_species, q=num_replicates_in_data, num_states=num_states, num_na=num_na, frac_zeros, skewness) %>%
+  select(name, 
+         nice_name, 
+         n=num_species, 
+         q=num_replicates_in_data, 
+         num_states, 
+         num_na, 
+         empirical) %>%
   unique %>%
   arrange(nice_name)
 write.csv(df_all_stats %>% select(-name),'outputs_figures/table_dataset_stats.csv',row.names=F)
@@ -91,11 +86,12 @@ write.csv(df_all_stats %>% select(-name),'outputs_figures/table_dataset_stats.cs
 
 
 varnames_nice = c(sampling_strategy='Sampling strategy',
-                  num_train='Number of training cases',
+                  num_train='Number of training cases (x 1000)',
                   num_species='Number of species',
                   empirical='Data from empirical study',
-                  frac_zeros='Fraction of absences',
-                  skewness='Skewness of abundance')
+                  richness_initial_mean='Experiment richness',
+                  richness_final_mean='Outcome richness',
+                  abundance_final_skewness_nonzero_mean='Outcome abundance skewness')
 
 plot_visreg_perf <- function(yvar,ylab)
 {
@@ -106,17 +102,16 @@ plot_visreg_perf <- function(yvar,ylab)
     arrange(frac) %>% 
     top_n(1) %>%
     ungroup %>%
-    mutate(deterministic=factor(deterministic),
-           empirical=factor(empirical)) %>%
-    mutate(num_cases = num_cases/1000)
+    mutate(empirical=factor(empirical)) %>%
+    mutate(num_train = num_cases/1000)
   
   if (yvar=="feasible.and.stable.balanced_accuracy")
   {
-    m_lmer = lmer(formula = formula(sprintf("%s ~ sampling_strategy + num_train + num_species + skewness + frac_zeros + (1|name)", yvar)), # no rep RE because equal replication 
+    m_lmer = lmer(formula = formula(sprintf("%s ~ sampling_strategy + num_train*num_species + richness_initial_mean + richness_final_mean + abundance_final_skewness_nonzero_mean + (1|name)", yvar)), # no rep RE because equal replication 
                   data=df_perf_001_e2e)
   } else
   {
-    m_lmer = lmer(formula = formula(sprintf("%s ~ sampling_strategy + num_train + num_species + skewness + frac_zeros + empirical + (1|name)", yvar)), # no rep RE because equal replication 
+    m_lmer = lmer(formula = formula(sprintf("%s ~ sampling_strategy + num_train*num_species + empirical + richness_initial_mean + richness_final_mean + abundance_final_skewness_nonzero_mean + (1|name)", yvar)), # no rep RE because equal replication 
                                 data=df_perf_001_e2e)
   }
 
@@ -124,7 +119,7 @@ plot_visreg_perf <- function(yvar,ylab)
   plots_lmer = vector(mode="list",length=length(varnames_nice))
   for (i in 1:length(varnames_nice))
   {
-    try(plots_lmer[[i]] <- visreg(m_lmer, xvar=names(varnames_nice)[i],by='name', overlay=TRUE, gg=TRUE) +
+    try(plots_lmer[[i]] <- visreg(m_lmer, xvar=names(varnames_nice)[i], gg=TRUE) +
       xlab(varnames_nice[i]) +
       theme_bw() +
       theme(axis.text.x = element_text(
@@ -135,7 +130,7 @@ plot_visreg_perf <- function(yvar,ylab)
   plots_arranged = ggarrange(plotlist=plots_lmer,common.legend = TRUE,arrange='hv')
   r2 = r.squaredGLMM(m_lmer)
   
-  return(list(plots=plots_arranged, r2=data.frame(yvar=yvar,r2), model=m_lmer))
+  return(list(plots=plots_arranged, model=m_lmer,r2=data.frame(yvar=yvar,r2)))
 }
 
 vrp_richness = plot_visreg_perf("richness.r2",expression("Mean ", paste(R^2, " of abundance prediction")))
@@ -247,7 +242,7 @@ plot_obs_pred_scatter <- function(list_data)
   maxval = max(allvals,na.rm=TRUE)
   
   g = ggplot(matrix_all,aes(x=obs,y=pred,group=row)) +
-    #geom_point() +
+    geom_point(alpha=0.01) +
     theme_bw() +
     scale_x_continuous(labels = function(x) format(x, scientific = TRUE)) +
     xlab("Observed abundance") + 
@@ -302,9 +297,9 @@ pick_datasets <- function(df, name, fraction, method, sampling_strategy, respons
 }
 
 
-plot_scatter_dataset <- function(name)
+plot_scatter_dataset <- function(name,fraction)
 {
-  l_this = pick_datasets(df_all, name=name, fraction=1e-1, method='e2e', sampling_strategy='mixed', response_variable='abundance')
+  l_this = pick_datasets(df_all, name=name, fraction=fraction, method='e2e', sampling_strategy='mixed', response_variable='abundance')
   if (!is.null(l_this))
   {
     p = plot_obs_pred_scatter(l_this)
@@ -318,10 +313,9 @@ plot_scatter_dataset <- function(name)
   #return(ggarrange(plotlist = plots_all,nrow=1,ncol=length(plots_all),common.legend = TRUE,legend='right'))
 }
 
-perf_plots = lapply(df_all_stats$name, plot_scatter_dataset)
-
-g_performance_scatter = ggarrange(plotlist=perf_plots,align='hv',common.legend = TRUE,legend='bottom',nrow=2,ncol=4)
-ggsave(g_performance_scatter, file='outputs_figures/g_performance_scatter.png',width=10,height=5)
+perf_plots_abundance = lapply(df_all_stats$name, plot_scatter_dataset, fraction=1e-1)
+g_performance_scatter_abundance = ggarrange(plotlist=perf_plots_abundance,align='hv',common.legend = TRUE,legend='bottom',nrow=2,ncol=4)
+ggsave(g_performance_scatter_abundance, file='outputs_figures/g_performance_scatter_abundance.png',width=10,height=5)
 
 
 
