@@ -35,7 +35,7 @@ if (DEBUG_MODE==TRUE)
 } else
 {
   CORES = 16 # number of cores to parallel process on
-  REPLICATES = 5
+  REPLICATES = 1
   GRID_POINTS = 20
   MIN_POINTS = 1e1
   MAX_POINTS = 1e4
@@ -426,7 +426,9 @@ do_predictions <- function(input_file,fn,
     # determine overall dataset skewness
     results_table$abundance_skewness_dataset[i] = skewness(abundances_dataset_all, na.rm=TRUE)
     results_table$abundance_skewness_nonzero_dataset[i] = skewness(abundances_dataset_all[abundances_dataset_all>0], na.rm=TRUE)
-
+    
+    print(data.frame(status="finished",results_table[i,]))
+    
     return(results_table[i,,drop=FALSE])
   }, mc.cores=CORES)
   
@@ -473,8 +475,7 @@ do_predictions(data_assemblages_glv_16,
                num_species = 16,
                num_replicates_in_data = 1)
 
-data_annual_plant_18 = read.csv('data_annual_plant/assemblages_annual_plant_18.csv') %>%
-  mutate(stable=replace(stable, is.na(stable), 1)) # as there is one missing case (the all zeros case)
+data_annual_plant_18 = read.csv('data_annual_plant/assemblages_annual_plant_18.csv')
 data_annual_plant_18 = data_annual_plant_18 %>% sample_n(2^14)
 do_predictions(data_annual_plant_18,
                fn = 'annual_plant',
