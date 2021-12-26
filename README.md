@@ -4,6 +4,9 @@ End to end machine learning for coexistence outcome prediction
 ## Author
 Benjamin Blonder (benjamin.blonder@berkeley.edu)
 
+## Datasets
+All included datasets are obtained from public repositories and re-shared here. I do not claim ownership over any of these files. More information on data provenance is available in the Supporting Information of the accompanying manuscript.
+
 ## Getting started
 Sequentially run the R scripts below in order to replicate all results from the main study.
 * `1 predict coexistence.R`* `2 plot coexistence.R`* `3 plot abundances.R`
