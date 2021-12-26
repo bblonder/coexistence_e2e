@@ -163,7 +163,7 @@ ggsave(vrp_composition$plots,file='outputs_figures/g_lm_composition.png',width=8
 ggsave(vrp_feasiblestable$plots,file='outputs_figures/g_lm_feasiblestable.png',width=8,height=5)
 
 r2_lm = rbindlist(lapply(list(vrp_richness, vrp_abundance, vrp_composition, vrp_feasiblestable), function(x) { 
-  data.frame(r2=x$r2, yvar=x$yvar) 
+  data.frame(r2=x$r2, yvar=x$yvar, ncases=x$ncases) 
   }))
 
 write.csv(r2_lm, file='outputs_figures/table_lm_r2.csv', row.names=FALSE)
