@@ -1,1 +1,0 @@
-find outputs_statistical/ -name '*method=love_*experimental_design=mixed_*abundance*' | zip archive.zip -@
