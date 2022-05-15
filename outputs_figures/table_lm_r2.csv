@@ -1,5 +1,0 @@
-"r2","yvar","ncases"
-0.809609592363753,"richness_scaled_mae",1733
-0.67260030593367,"abundance_scaled_mae",1733
-0.618871065800211,"composition_balanced_accuracy_mean",1733
-0.545922227834428,"feasible_and_stable_balanced_accuracy",520

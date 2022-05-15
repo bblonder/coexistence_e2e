@@ -13,8 +13,8 @@ plot_data <- function(data,name)
   # reorder data
   data = data %>% arrange(across(all_of(1:n_sp)))
   
-  # remove outliers for all datasets
-  data = quantile_trim(data)
+  # flag quantile outliers
+  data = quantile_max_trim(data)
   # plot abundance structure
 
   data_in = data %>%
@@ -29,20 +29,22 @@ plot_data <- function(data,name)
   
   g_in = ggplot(data_in, aes(x=variable,y=row,fill=factor(value))) + 
     geom_raster() +
-    scale_fill_manual(values=c('white','orange'),name='Experiment') +
+    scale_fill_manual(values=c('white','orange'),labels=c('Absent','Present'),name='') +
     theme_bw() +
     xlab('Species') +
-    ylab('Assemblage') +
-    theme(axis.text.x=element_blank(),axis.text.y=element_blank(),axis.ticks.y=element_blank()) +
-    ggtitle(name)
+    ylab('Experiment') +
+    theme(axis.text.x=element_blank()) +
+    ggtitle(name) +
+    scale_y_continuous(expand=c(0,0),breaks=range(data_in$row))
   
   g_out = ggplot(data_out, aes(x=variable,y=row,fill=value)) + 
     geom_raster() +
-    scale_fill_gradient(name='Abundance',low='white',high='blueviolet',na.value='red') +
+    scale_fill_gradient(name='Outcome\nabundance',low='white',high='blueviolet',na.value='red') +
     theme_bw() +
     xlab('Species') +
-    ylab('Assemblage') +
-    theme(axis.text.x=element_blank(),axis.text.y=element_blank(),axis.ticks.y=element_blank())
+    ylab('') +
+    theme(axis.text.x=element_blank()) +
+    scale_y_continuous(expand=c(0,0),breaks=range(data_in$row))
   
   ggsave(ggarrange(g_in, g_out,nrow=1,ncol=2,align='hv'),file=sprintf('outputs_figures/g_experiment_%s.png',name),width=6,height=6)
 }
@@ -61,8 +63,8 @@ g_human_gut = plot_data(data_assemblages_H_12,'Human gut')
 data_assemblages_M_11 = read.csv('data_glv/assemblages_M_11.csv')
 g_mouse_gut = plot_data(data_assemblages_M_11,'Mouse gut')
 
-data_assemblages_glv_16 = read.csv('data_glv/assemblages_glv_16.csv')
-g_glv_simulated = plot_data(data_assemblages_glv_16,'GLV simulated')
+# data_assemblages_glv_16 = read.csv('data_glv/assemblages_glv_16.csv')
+# g_glv_simulated = plot_data(data_assemblages_glv_16,'GLV simulated')
 
 data_annual_plant_18 = read.csv('data_annual_plant/assemblages_annual_plant_18.csv')
 g_annual_plant = plot_data(data_annual_plant_18,'Annual plant')

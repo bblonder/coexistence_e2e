@@ -1,9 +1,8 @@
-"nice_name","n","q","num_states","num_na","empirical"
+"nice_name","num_species_dataset","num_replicates_dataset","num_states","num_na","empirical"
 "Annual plant",18,1,262144,23593,FALSE
 "Cedar Creek",18,1,154,14,TRUE
 "Fly gut",5,48,1536,36,TRUE
-"GLV simulated",16,1,65536,4253,FALSE
-"Human gut",12,1,4096,149,FALSE
-"Mouse gut",11,1,2048,88,FALSE
+"Human gut",12,1,4096,246,FALSE
+"Mouse gut",11,1,2048,256,FALSE
 "Soil bacteria",8,2,570,23,TRUE
 "SORTIE-ND",9,3,1536,69,FALSE

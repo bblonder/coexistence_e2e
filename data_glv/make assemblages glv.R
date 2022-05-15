@@ -1,17 +1,8 @@
-library(viridis)
-library(ggplot2)
-library(randomForest)
-library(e1071)
 library(dplyr)
 library(tidyr)
-
-
-
-
-
-
-
-
+library(deSolve)
+library(ggplot2)
+library(reshape2)
 
 generate_assemblages <- function(n, labels=letters)
 {
@@ -108,10 +99,37 @@ determine_fixed_point <- function(params)
 {
   if (length(params$r) > 0)
   {
-    x_star = -1 * solve(params$A) %*% params$r
+    # do forward simulation
+    LVmod = function(t, N, params) {
+        r = params$r
+        A = params$A
+        dNdt = N * (r + A %*% N)
+        list(dNdt)
+    } 
     
-    x_star = as.numeric(t(x_star))
-    x_star[x_star<0] = 0 # clip to non-negative values to reflect biological realism
+    time = seq(from=0, to=1000, by=0.1)
+    x_0 = rep(1, length(params$r))
+    
+    simulation = ode(
+        y = x_0,
+        times = time,
+        func = LVmod,
+        parms = params
+      ) %>%
+      as.data.frame %>%
+      as_tibble
+    
+    # sim_to_plot = melt(simulation,id.vars='time')
+    # print(str(sim_to_plot))
+    # g = ggplot(sim_to_plot,aes(x=time,y=value,color=variable)) +
+    #   geom_line()
+    # ggsave(g,file=sprintf('~/Downloads/test_%f.png',runif(1)))
+    
+    x_star =
+      simulation %>%
+      filter(time == max(time)) %>%
+      select(-time) %>%
+      as.numeric()
     
     names(x_star) = paste(names(params$r),"star",sep=".")
   }
@@ -123,12 +141,10 @@ determine_fixed_point <- function(params)
   return(x_star)
 }
 
-determine_feasibility <- function(params)
+determine_feasibility <- function(params, x_star)
 {
   if (length(params$r) > 0)
   {
-    x_star = determine_fixed_point(params)
-    
     feasibility = all(x_star > 0)
   }
   else
@@ -139,12 +155,10 @@ determine_feasibility <- function(params)
   return(feasibility)
 }
 
-determine_stability <- function(params)
+determine_stability <- function(params, x_star)
 {
   if (length(params$r) > 0)
   {
-    x_star = determine_fixed_point(params)
-    
     Jacobian = diag(x=x_star,nrow=nrow(params$A),ncol=ncol(params$A)) * params$A
     lambda = eigen(Jacobian)$values
     
@@ -168,14 +182,15 @@ fill_in_assemblages <- function(assemblages, params)
     
     x_star = determine_fixed_point(params_this_row)
     
-    assemblages[i,"stable"] = determine_stability(params_this_row)
-    assemblages[i,"feasible"] = determine_feasibility(params_this_row)
+    assemblages[i,"stable"] = determine_stability(params_this_row, x_star=x_star)
+    assemblages[i,"feasible"] = determine_feasibility(params_this_row, x_star=x_star)
     
     if (!is.null(x_star))
     {
       assemblages[i,names(x_star)] = x_star
     }
     
+    # set abundance of 0.01 as the minimum threshold to 'count' for richness
     assemblages[i,"richness"] = sum(x_star > 0.01)
   }
   return(assemblages)
@@ -186,6 +201,7 @@ fill_in_assemblages <- function(assemblages, params)
 
 set.seed(1) # replicability
 nsp_glv_16 <- 16
+warning('change # of species back!')
 params_glv_16 = generate_params(n = nsp_glv_16, A.norm.mean = -0.2, r.norm.mean = 1.5)
 assemblages_glv_16 = fill_in_assemblages(params = params_glv_16, assemblages = generate_assemblages(n = nsp_glv_16))
 write.csv(assemblages_glv_16,file='assemblages_glv_16.csv',row.names=FALSE)
