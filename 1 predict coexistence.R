@@ -34,7 +34,7 @@ if (DEBUG_MODE==TRUE)
   MAX_POINTS = 1e2
 } else
 {
-  CORES = 20
+  CORES = 4
   REPLICATES = 10
   GRID_POINTS = 20
   MIN_POINTS = 1e1

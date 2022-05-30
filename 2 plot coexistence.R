@@ -239,7 +239,8 @@ xvars_all = c("type",
                 "num_losses_mean_train",
                 "abundance_final_skewness_mean_train")
 
-m_richness_scaled_mae_test_dataset = 
+m_richness_scaled_mae_test_dataset = lmer(richness_scaled_mae_test ~ (type + num_species_dataset + num_losses_mean_train + abundance_final_skewness_mean_train) + (1|nice_name),
+                                          data=df_all_for_regression_dataset)
 
 m_composition_balanced_accuracy_mean_test_dataset = lmer(oneminuscomposition_balanced_accuracy_mean_test ~ (type + num_species_dataset + num_losses_mean_train + abundance_final_skewness_mean_train) + (1|nice_name),
                                                  data=df_all_for_regression_dataset)
