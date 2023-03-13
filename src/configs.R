@@ -6,7 +6,7 @@ MIN_POINTS = 1e1
 MAX_POINTS = 1e4
 
 # Debugging override
-if (DEBUG_MODE==TRUE) {
+if (DEBUG_MODE == TRUE) {
   CORES = 1
   REPLICATES = 1
   GRID_POINTS = 1

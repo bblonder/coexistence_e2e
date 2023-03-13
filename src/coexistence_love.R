@@ -345,20 +345,138 @@ get_ground_truth_values <- function(
   return(values_ground_truth)
 }
 
-evaluate_balanced_accuracy <- function() {
-
+evaluate_balanced_accuracy_singlevar <- function(
+  confusion_matrix) {
+  # Directly use confusion matrix to evaluate balanced accuracy for single var
+  return(confusion_matrix$byClass["Balanced Accuracy"])
 }
 
-evaluate_mean_absolute_error <- function() {
+evaluate_balanced_accuracy_multivar <- function(
+  values_predicted,
+  values_ground_truth) {
+  # Get balanced accuracy with casewise mean
+  balanced_accuracy = NA
+  try(balanced_accuracy <- balanced_accuracy_casewise_mean(
+    pred = values_predicted, 
+    obs = values_observed)
+  )
 
+  return(balanced_accuracy)
 }
 
-evaluate_confusion_matrix <- function() {
-
+evaluate_mean_absolute_error_singlevar <- function(
+  values_predicted,
+  values_ground_truth) {
+  return(mean_absolute_error(
+    pred = values_predicted, 
+    obs = values_ground_truth
+  ))
 }
 
-# Shuffle the x data for reshuffle
-if (reshuffle) {
-  data_for_rf_training[,names(data_for_rf_training)[1:num_species]] = 
-    data_for_rf_training[sample(1:nrow(data_for_rf_training)), names(data_for_rf_training)[1:num_species]]
+evaluate_mean_absolute_error_multivar <- function(
+  values_predicted,
+  values_ground_truth) {
+  # Get MAE with casewise mean
+  mean_absolute_error = NA
+  try(mean_absolute_error <- mean_absolute_error_casewise_mean(
+    pred = values_predicted, 
+    obs = values_observed)
+  )
+
+  return(mean_absolute_error)
+}
+
+evaluate_confusion_matrix <- function(
+  values_predicted,
+  values_ground_truth) {
+  return(confusionMatrix(
+    factor(values_predicted, levels = c(FALSE, TRUE)), 
+    factor(values_ground_truth, levels = c(FALSE, TRUE))
+  ))
+}
+
+evaluate_statistics <- function(
+  values_predicted,
+  values_ground_truth,
+  predictor_variable,
+  assemblages) {
+  # Prepare all variables
+  mean_absolute_error = NA
+  balanced_accuracy = NA
+  confusion_matrix = NA
+
+  # Determine variable settings
+  is_single_var = !(predictor_variable %in% c("_abundance", "_composition"))
+  is_factor = FALSE
+  if (is_single_var & 
+    (is.factor(assemblages[,predictor_variable]) | 
+      is.logical(assemblages[,predictor_variable]))
+  ) {
+    is_factor = TRUE
+  }
+
+  # Calculate all applicable statistics
+  if (is_single_var) {
+    if (is_factor) {
+      confusion_matrix = evaluate_confusion_matrix(
+        values_predicted, values_ground_truth)
+      balanced_accuracy = evaluate_balanced_accuracy_singlevar(confusion_matrix)
+    }
+    else {
+      mean_absolute_error = evaluate_mean_absolute_error_singlevar(
+        values_predicted, values_ground_truth)
+    }
+  }
+  else {
+    if (predictor_variable == "_composition") {
+      balanced_accuracy = evaluate_balanced_accuracy_multivar(
+        values_predicted, values_ground_truth)
+    }
+    else {
+      mean_absolute_error = evaluate_mean_absolute_error_multivar(
+        values_predicted, values_ground_truth)
+    }
+  }
+
+  return(list(
+    mean_absolute_error = mean_absolute_error,
+    balanced_accuracy = balanced_accuracy,
+    confusion_matrix = confusion_matrix
+  ))
+}
+
+clean_input_data <- function(input_file) {
+  # Get the input data and create feasible and stable variable
+  data = input_file %>%
+    mutate(feasible.and.stable = factor(stable & feasible, levels=c(FALSE, TRUE))) %>%
+    select(-feasible, -stable)
+  
+  # Flag quantile outliers
+  data = quantile_max_trim(data)
+  
+  # Remove missing cases that arose from the above
+  which_rows_na = data %>% 
+    select(contains("star")) %>% 
+    rowSums %>%
+    is.na %>%
+    which
+  print(sprintf("Removed %d problematic case rows",length(which_rows_na)))
+  data = data[-which_rows_na,]
+
+  return(data)
+}
+
+generate_sample_size_sequences <- function(
+  min_points,
+  max_points,
+  num_grid_points,
+  num_data_row) {
+  # Make the sample size sequence  
+  sample_size_seq_all = unique(round(log_seq(
+    min_points, max_points, length.out = num_grid_points)))
+
+  # Trim to only the sizes that are compatible with the dataset
+  sample_size_seq_all = sample_size_seq_all[sample_size_seq_all <= num_data_row]
+
+  return(sample_size_seq_all)
 }

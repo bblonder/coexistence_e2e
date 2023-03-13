@@ -21,6 +21,24 @@ DEBUG_MODE = TRUE
 source('src/coexistence_love.R')
 source('src/configs.R')
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ###### MAIN FUNCTIONS
 predict_model <- function(yvar, assemblages, rows_train, method, num_species) {
   if (length(rows_train)==0) # if there is no training data at the expected richness
@@ -263,7 +281,8 @@ predict_model <- function(yvar, assemblages, rows_train, method, num_species) {
 
 
 
-do_predictions <- function(input_file,fn,
+do_predictions <- function(input_file,
+                           filename,
                            num_species, 
                            num_replicates_in_data = 1, 
                            num_replicates_in_rf=REPLICATES,
@@ -324,7 +343,7 @@ do_predictions <- function(input_file,fn,
     #cat('.')
     cat(sprintf('%d %d', i, nrow(results_table)))
     cat('\n')
-    #print(data.frame(file=fn, i=i, fraction_finished=i/nrow(results_table), results_table[i,])) #DEBUG
+    #print(data.frame(file=filename, i=i, fraction_finished=i/nrow(results_table), results_table[i,])) #DEBUG
 
     # set sample size
     n_train = results_table$num_train[i]
@@ -374,9 +393,9 @@ do_predictions <- function(input_file,fn,
     
     # write out the experimental conditions if there are enough training rows
     try(write.csv(data[rows_train,], 
-              file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=abundance_output=experiment_train.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE))
+              file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=abundance_output=experiment_train.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE))
     try(write.csv(data[setdiff(1:nrow(data),rows_train),], 
-              file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=abundance_output=experiment_test.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE))
+              file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=abundance_output=experiment_test.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE))
         
     prediction_abundance = predict_model(yvar = "_abundance",
                                       assemblages = data,
@@ -388,10 +407,10 @@ do_predictions <- function(input_file,fn,
     {
       results_table$abundance_mae_mean_test[i]=prediction_abundance$mae_mean_test
       results_table$abundance_mae_mean_train[i]=prediction_abundance$mae_mean_train
-      write.csv(prediction_abundance$pred_test, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=abundance_output=pred_test.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
-      write.csv(prediction_abundance$obs_test, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=abundance_output=obs_test.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
-      write.csv(prediction_abundance$pred_train, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=abundance_output=pred_train.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
-      write.csv(prediction_abundance$obs_train, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=abundance_output=obs_train.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+      write.csv(prediction_abundance$pred_test, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=abundance_output=pred_test.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+      write.csv(prediction_abundance$obs_test, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=abundance_output=obs_test.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+      write.csv(prediction_abundance$pred_train, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=abundance_output=pred_train.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+      write.csv(prediction_abundance$obs_train, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=abundance_output=obs_train.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
       
     }   
     #print(results_table[i,,drop=FALSE]) # DEBUG
@@ -405,10 +424,10 @@ do_predictions <- function(input_file,fn,
     {
       results_table$composition_balanced_accuracy_mean_test[i]=prediction_composition$ba_test
       results_table$composition_balanced_accuracy_mean_train[i]=prediction_composition$ba_train
-      write.csv(prediction_composition$pred_test, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=composition_output=pred_test.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
-      write.csv(prediction_composition$obs_test, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=composition_output=obs_test.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
-      write.csv(prediction_composition$pred_train, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=composition_output=pred_train.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
-      write.csv(prediction_composition$obs_train, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=composition_output=obs_train.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+      write.csv(prediction_composition$pred_test, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=composition_output=pred_test.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+      write.csv(prediction_composition$obs_test, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=composition_output=obs_test.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+      write.csv(prediction_composition$pred_train, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=composition_output=pred_train.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+      write.csv(prediction_composition$obs_train, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=composition_output=obs_train.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
     }
     #print(results_table[i,,drop=FALSE]) # DEBUG
     
@@ -421,10 +440,10 @@ do_predictions <- function(input_file,fn,
     {
       results_table$richness_mae_test[i]=prediction_richness$mae_test
       results_table$richness_mae_train[i]=prediction_richness$mae_train
-      write.csv(prediction_richness$pred_test, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=richness_output=pred_test.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
-      write.csv(prediction_richness$obs_test, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=richness_output=obs_test.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
-      write.csv(prediction_richness$pred_train, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=richness_output=pred_train.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
-      write.csv(prediction_richness$obs_train, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=richness_output=obs_train.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+      write.csv(prediction_richness$pred_test, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=richness_output=pred_test.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+      write.csv(prediction_richness$obs_test, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=richness_output=obs_test.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+      write.csv(prediction_richness$pred_train, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=richness_output=pred_train.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+      write.csv(prediction_richness$obs_train, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=richness_output=obs_train.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
     }
     #print(results_table[i,,drop=FALSE]) # DEBUG
     
@@ -443,8 +462,8 @@ do_predictions <- function(input_file,fn,
     # if (!is.null(prediction_fs))
     # {
     #   results_table$feasible_and_stable_balanced_accuracy[i]=prediction_fs$ba
-    #   write.csv(prediction_fs$pred, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=fs_output=pred.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
-    #   write.csv(prediction_fs$obs, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=fs_output=obs.csv', fn, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+    #   write.csv(prediction_fs$pred, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=fs_output=pred.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
+    #   write.csv(prediction_fs$obs, file=sprintf('outputs/statistical/table_dataset=%s_i=%d_method=%s_rep=%d_num_train=%d_experimental_design=%s_response_var=fs_output=obs.csv', filename, i, results_table$method[i], results_table$rep[i], results_table$num_train[i], results_table$experimental_design[i]), row.names=FALSE)
     # }
     #print(results_table[i,,drop=FALSE]) # DEBUG
     
@@ -482,10 +501,10 @@ do_predictions <- function(input_file,fn,
   try(results_df <- rbindlist(results_list))
   if (!is.null(results_df))
   {
-    write.csv(results_df, file=sprintf('outputs/statistical/results_%s.csv',fn), row.names=FALSE)
+    write.csv(results_df, file=sprintf('outputs/statistical/results_%s.csv',filename), row.names=FALSE)
   }
   # save the raw output too in case of a rbind issue for error checking
-  saveRDS(results_list,file=sprintf('outputs/statistical/results_%s.Rdata',fn))
+  saveRDS(results_list,file=sprintf('outputs/statistical/results_%s.Rdata',filename))
   
   indices_errors = which(sapply(results_list,class)=="try-error")
   if (length(indices_errors) > 0)
@@ -515,21 +534,21 @@ data_annual_plant_18 = read.csv('data/annual_plant/assemblages_annual_plant_18.c
 #  data_annual_plant_18 = data_annual_plant_18 %>% sample_n(2^14)
 #}
 do_predictions(data_annual_plant_18,
-               fn = 'annual_plant',
+               filename = 'annual_plant',
                num_species = 18,
                num_replicates_in_data = 1)
 
 set.seed(1)
 data_assemblages_M_11 = read.csv('data/glv/assemblages_M_11.csv')
 do_predictions(data_assemblages_M_11,
-               fn = 'mouse_gut',
+               filename = 'mouse_gut',
                num_species = 11,
                num_replicates_in_data = 1)
 
 set.seed(1)
 data_soil_bacteria_8 = read.csv('data/friedman_gore/data_friedman_gore.csv')
 do_predictions(data_soil_bacteria_8,
-               fn = 'soil_bacteria',
+               filename = 'soil_bacteria',
                num_species = 8, 
                num_replicates_in_data = 2) # this is an underestimate but should not cause problems
 
@@ -547,27 +566,27 @@ set.seed(1)
 #   data_assemblages_glv_16 = data_assemblages_glv_16 %>% sample_n(2^14)
 # #}
 # do_predictions(data_assemblages_glv_16,
-#                fn = 'glv_simulated',
+#                filename = 'glv_simulated',
 #                num_species = 16,
 #                num_replicates_in_data = 1)
 
 set.seed(1)
 data_sortie_9_3 = read.csv('data/sortie/data_sortie.csv')
 do_predictions(data_sortie_9_3,
-               fn = 'sortie-nd_plants',
+               filename = 'sortie-nd_plants',
                num_species = 9,
                num_replicates_in_data = 3)
 
 set.seed(1)
 data_fly_5 = read.csv('data/fly/data_fly.csv')
 do_predictions(data_fly_5,
-               fn = 'fly_gut',
+               filename = 'fly_gut',
                num_species = 5,
                num_replicates_in_data = 48)
 
 set.seed(1)
 data_assemblages_cedar_creek_18 = read.csv('data/cedar_creek/cedar_creek_2018.csv')
 do_predictions(data_assemblages_cedar_creek_18,
-               fn = 'cedar_creek_plants',
+               filename = 'cedar_creek_plants',
                num_species = 18,
                num_replicates_in_data = 1)
