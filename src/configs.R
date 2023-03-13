@@ -1,0 +1,15 @@
+# Computation configs
+CORES = 4
+REPLICATES = 10
+GRID_POINTS = 20
+MIN_POINTS = 1e1
+MAX_POINTS = 1e4
+
+# Debugging override
+if (DEBUG_MODE==TRUE) {
+  CORES = 1
+  REPLICATES = 1
+  GRID_POINTS = 1
+  MIN_POINTS = 1e2
+  MAX_POINTS = 1e2
+}

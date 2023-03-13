@@ -13,11 +13,6 @@ library(vegan)
 library(RColorBrewer)
 library(MuMIn)
 
-if (!file.exists('outputs/figures'))
-{
-  dir.create('outputs/figures')
-}
-
 fn_outputs = dir('outputs/statistical',pattern="result.*\\.csv",full.names = TRUE)
 
 df_all = rbindlist(lapply(1:length(fn_outputs), function(i)

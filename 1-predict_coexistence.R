@@ -9,44 +9,20 @@ library(data.table)
 library(e1071)
 library(vegan)
 
-# DECIDE RUN MODE
-DEBUG_MODE = FALSE
+# Set working directory
+setwd("~/Dropbox/Berkeley/Research/Projects/Current/ecosys/coexistence_love")
 
 # SETUP OUTPUT DIRECTORY
-if (!file.exists("outputs_statistical"))
-{
-  dir.create("outputs_statistical")
-}
+dir.create(file.path(getwd(), 'outputs/figures'), recursive = TRUE)
+dir.create(file.path(getwd(), 'outputs/statistical'), recursive = TRUE)
 
-# LOAD HELPERS
-source('utils/freq_weight.R')
-source('utils/skill_statistics.R')
-source('utils/log_seq.R')
-source('utils/quantile_trim.R')
-
-# KEY PARAMETERS
-if (DEBUG_MODE==TRUE)
-{
-  CORES = 1
-  REPLICATES = 1
-  GRID_POINTS = 1
-  MIN_POINTS = 1e2
-  MAX_POINTS = 1e2
-} else
-{
-  CORES = 4
-  REPLICATES = 10
-  GRID_POINTS = 20
-  MIN_POINTS = 1e1
-  MAX_POINTS = 1e4
-}
+# Load helpers and settings
+DEBUG_MODE = TRUE
+source('src/coexistence_love.R')
+source('src/configs.R')
 
 ###### MAIN FUNCTIONS
-predict_model <- function(yvar, assemblages, rows_train, method, num_species)
-{
-  cat(yvar) # DEBUG
-  cat(' ')
-  
+predict_model <- function(yvar, assemblages, rows_train, method, num_species) {
   if (length(rows_train)==0) # if there is no training data at the expected richness
   {
     return(NULL)
@@ -57,7 +33,9 @@ predict_model <- function(yvar, assemblages, rows_train, method, num_species)
   # select training subset
   data_for_rf_training = assemblages[rows_train,]
 
-  if (method=='love + reshuffle')
+  print(data_for_rf_training)
+
+  if (method=='love-reshuffle')
   {
     # shuffle the x data
     data_for_rf_training[,names(data_for_rf_training)[1:num_species]] = data_for_rf_training[sample(1:nrow(data_for_rf_training)),names(data_for_rf_training)[1:num_species]]
@@ -98,7 +76,7 @@ predict_model <- function(yvar, assemblages, rows_train, method, num_species)
         ))
     }
     
-    if (method %in% c('love','love + reshuffle'))
+    if (method %in% c('love','love-reshuffle'))
     {
       formula_this_multivar = formula(sprintf("Multivar(%s)~%s",paste(yvar_this,collapse=", "),paste(names(data_for_rf_training)[1:num_species],collapse="+")))
       
@@ -197,7 +175,7 @@ predict_model <- function(yvar, assemblages, rows_train, method, num_species)
   }
   else # if we are doing single variable prediction
   {
-    if (method %in% c('love','love + reshuffle'))
+    if (method %in% c('love','love-reshuffle'))
     {
       # add weights
       formula_this_1var = formula(sprintf("%s~%s",yvar,paste(names(data_for_rf_training)[1:num_species],collapse="+")))
@@ -315,7 +293,7 @@ do_predictions <- function(input_file,fn,
   sample_size_seq_all = sample_size_seq_all[sample_size_seq_all <= nrow(data)]
   
   results_table = expand.grid(rep=1:num_replicates_in_rf, 
-                              method=c('naive','love + reshuffle','love'),
+                              method=c('naive','love-reshuffle','love'),
                               richness_mae_test=NA,
                               feasible_and_stable_balanced_accuracy_test=NA,
                               composition_balanced_accuracy_mean_test=NA,
