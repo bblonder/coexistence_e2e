@@ -480,3 +480,22 @@ generate_sample_size_sequences <- function(
 
   return(sample_size_seq_all)
 }
+
+perform_prediction_experiment <- function(
+  predictor_variable,
+  assemblages, 
+  rows_train,
+  rows_test, 
+  method, 
+  num_species) {
+  # If there is no training data, just exit early
+  if (length(rows_train)==0) {
+    return(NULL)
+  }
+
+  # Get training & testing data
+  data_training = assemblages[rows_train,]
+  data_testing = assemblages[rows_test,]
+
+  
+}
