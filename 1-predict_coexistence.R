@@ -18,11 +18,22 @@ dir.create(file.path(getwd(), 'outputs/statistical'), recursive = TRUE)
 directory_string = file.path(getwd(), 'outputs/statistical')
 
 # Load helpers and settings
-DEBUG_MODE = TRUE
+DEBUG_MODE = FALSE
 source('src/configs.R')
 source('src/coexistence_love.R')
 
 # Perform analyses
+set.seed(1)
+data_assemblages_M_11 = read.csv('data/glv/assemblages_M_11.csv')
+results = perform_prediction_experiment_full(
+  directory_string,
+  data_assemblages_M_11,
+  dataset_name = 'mouse_gut',
+  num_species = 11,
+  method_list = METHODS,
+  experimental_design_list = EXPERIMENTAL_DESIGNS,
+  num_replicates_in_data = 1)
+
 set.seed(1)
 data_soil_bacteria_8 = read.csv('data/friedman_gore/data_friedman_gore.csv')
 results = perform_prediction_experiment_full(
@@ -49,25 +60,14 @@ results = perform_prediction_experiment_full(
   num_replicates_in_data = 1)
 
 set.seed(1)
-data_assemblages_M_11 = read.csv('data/glv/assemblages_M_11.csv')
-results = perform_prediction_experiment_full(
-  directory_string,
-  data_assemblages_M_11,
-  dataset_name = 'mouse_gut',
-  num_species = 11,
-  method_list = METHODS,
-  experimental_design_list = EXPERIMENTAL_DESIGNS,
-  num_replicates_in_data = 1)
-
-set.seed(1)
 data_assemblages_H_12 = read.csv('data/glv/assemblages_H_12.csv')
 results = perform_prediction_experiment_full(
   directory_string,
   data_assemblages_H_12,
   'human_gut',
-  num_species 
+  num_species = 12,
   method_list = METHODS,
-  experimental_design_list = EXPERIMENTAL_DESIGNS,= 12,
+  experimental_design_list = EXPERIMENTAL_DESIGNS,
   num_replicates_in_data = 1)
 
 set.seed(1)
