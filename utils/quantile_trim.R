@@ -5,7 +5,7 @@ quantile_max_trim <- function(df, q=0.5*1e-2, max_val=1e7, round_zero = TRUE)
   cols_star = grep("star",names(df))
   for (i in cols_star)
   {
-    df[df[,i] < 0 & df[,i] > -1e-6, i] = 0
+    df[df[,i] < 1e-10 & df[,i] > -1e-6, i] = 0
     df[df[,i] > 1e7, i] = NA
   }
   

@@ -24,17 +24,6 @@ source('src/coexistence_love.R')
 
 # Perform analyses
 set.seed(1)
-data_assemblages_M_11 = read.csv('data/glv/assemblages_M_11.csv')
-results = perform_prediction_experiment_full(
-  directory_string,
-  data_assemblages_M_11,
-  dataset_name = 'mouse_gut',
-  num_species = 11,
-  method_list = METHODS,
-  experimental_design_list = EXPERIMENTAL_DESIGNS,
-  num_replicates_in_data = 1)
-
-set.seed(1)
 data_soil_bacteria_8 = read.csv('data/friedman_gore/data_friedman_gore.csv')
 results = perform_prediction_experiment_full(
   directory_string,
@@ -44,6 +33,17 @@ results = perform_prediction_experiment_full(
   method_list = METHODS,
   experimental_design_list = EXPERIMENTAL_DESIGNS,
   num_replicates_in_data = 2) # this is an underestimate but should not cause problems
+
+set.seed(1)
+data_assemblages_M_11 = read.csv('data/glv/assemblages_M_11.csv')
+results = perform_prediction_experiment_full(
+  directory_string,
+  data_assemblages_M_11,
+  dataset_name = 'mouse_gut',
+  num_species = 11,
+  method_list = METHODS,
+  experimental_design_list = EXPERIMENTAL_DESIGNS,
+  num_replicates_in_data = 1)
 
 set.seed(1)
 data_annual_plant_18 = read.csv('data/annual_plant/assemblages_annual_plant_18.csv')

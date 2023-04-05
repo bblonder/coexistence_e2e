@@ -1,3 +1,5 @@
+library(MASS)
+library(raster)
 library(ranger)
 library(dplyr)
 library(ggplot2)
@@ -10,8 +12,11 @@ library(e1071)
 library(vegan)
 library(datastructures)
 library(RANN)
-library(MASS)
-library(raster)
+library(conflicted)
+conflict_prefer("union", "base")
+conflict_prefer("intersect", "base")
+conflict_prefer("select", "dplyr")
+conflict_prefer("filter", "dplyr")
 
 # Source utility functions
 source('utils/freq_weight.R')
@@ -43,16 +48,6 @@ get_predictor_columns <- function(
   }
 }
 
-get_single_species_and_leave_one_out_rows <- function(
-  assemblages, 
-  num_species) {
-  # Get the single species only rows and leave one out rows
-  single_species_rows = which(rowSums(assemblages[,1:num_species]) == 1)
-  leave_one_out_rows = which(rowSums(assemblages[,1:num_species]) == num_species - 1)
-
-  return(union(single_species_rows, leave_one_out_rows))
-}
-
 convert_state_idx_to_vec <- function(
   num_species,
   state_index) {
@@ -69,14 +64,39 @@ convert_state_idx_to_vec <- function(
 convert_vec_to_state_idx <- function(
   num_species,
   state_vec) {
-  # Convert binary state vector into integer
+  # Convert binary state vector into integer (null state is 2^N)
   state_idx = 0
   state_existence = which(state_vec == 1)
   for (digits in state_existence) {
     state_idx = state_idx + 2^(digits-1)
   }
+  if (state_idx == 0) {
+    state_idx = 2^num_species
+  }
 
   return(state_idx)
+}
+
+get_single_species_and_leave_one_out_state_idxs <- function(
+  num_species) {
+  # Numerically calculate index vectors
+  single_species_state_idxs = 2^(0:(num_species-1))
+  leave_one_out_state_idxs = 2^num_species - 1 - 2^(0:(num_species-1))
+  
+  return(union(single_species_state_idxs, leave_one_out_state_idxs))
+}
+
+get_full_state_grid <- function(
+  num_species) {
+  # Generate all states 
+  full_states = do.call(
+    rbind, 
+    lapply(
+      1:2^num_species, 
+      function(x) convert_state_idx_to_vec(num_species, x)
+    )
+  )
+  return(full_states)
 }
 
 get_state_assemblages_mapping <- function(
@@ -86,13 +106,13 @@ get_state_assemblages_mapping <- function(
   assemblages$state_idx = apply(
     assemblages[,1:num_species], 
     1, 
-    function(x) convert_vec_to_state_idx(num_species,x)
+    function(x) convert_vec_to_state_idx(num_species, x)
   )
 
   return(assemblages)
 }
 
-generate_rows_train <- function(
+generate_state_idxs_train <- function(
   experimental_design,
   num_train,
   assemblages,
@@ -105,47 +125,51 @@ generate_rows_train <- function(
   }
   
   # Variable setup
-  initial_richness = apply(assemblages[,1:num_species], 1, sum)
-  max_rows = nrow(assemblages)
   training_sample_size = num_train
   if (method == "sequential_rf") {
-    training_sample_size = floor(num_train / (hyperparams$sequential_rf$iterations + 1))
+    training_sample_size = ceiling(num_train / (hyperparams$sequential_rf$iterations + 1))
   }
+  # Extract the full states and the states that actually exist
+  full_states = get_full_state_grid(num_species)
+  existing_state_idxs = unique(assemblages[,'state_idx'])
   
   # Biased knowledge sampling from SP & LOO
   if (experimental_design == "prior") {
-    prior_informed_training_rows = get_single_species_and_leave_one_out_rows(
-      assemblages, num_species)
-    if (length(prior_informed_training_rows) > num_train) {
+    prior_informed_training_idxs = get_single_species_and_leave_one_out_state_idxs(num_species)
+    if (length(prior_informed_training_idxs) > num_train) {
       return(NULL)
     }
     # Early return is OK since this will always be less than the max size
-    if (training_sample_size > length(prior_informed_training_rows)) {
-      sampling_rows = setdiff(1:max_rows, prior_informed_training_rows)
-      rest_sampled_rows = sample(
-        x = sampling_rows, 
-        size = training_sample_size - length(prior_informed_training_rows))
-      return(union(prior_informed_training_rows, rest_sampled_rows))
+    if (training_sample_size > length(prior_informed_training_idxs)) {
+      sampling_idxs = setdiff(existing_state_idxs, prior_informed_training_idxs)
+      rest_sampled_idxs = sample(
+        x = sampling_idxs, 
+        size = training_sample_size - length(prior_informed_training_idxs))
+      return(union(prior_informed_training_idxs, rest_sampled_idxs))
     }
     else {
-      return(prior_informed_training_rows)
+      return(prior_informed_training_idxs)
     }
   }
   # Uniform random sampling
   else if (experimental_design == "mixed") {
-    sampling_rows = 1:max_rows 
+    sampling_idxs = existing_state_idxs 
   }
-  # Sample from low richness rows
+  # Sample from low richness states
   else if (grepl("low", experimental_design, fixed = TRUE)) {
     max_richness = as.numeric(gsub(
       "low-", "", as.character(experimental_design), fixed = TRUE))
-    sampling_rows = which(initial_richness <= max_richness)
+    sampling_idxs = intersect(
+      which(rowSums(full_states) <= max_richness),
+      existing_state_idxs)
   }
-  # Sample from high richness rows
+  # Sample from high richness states
   else if (grepl("high", experimental_design, fixed = TRUE)) {
     min_richness = num_species - as.numeric(gsub(
       "high-", "" , as.character(experimental_design), fixed = TRUE))
-    sampling_rows = which(initial_richness >= min_richness)
+    sampling_idxs = intersect(
+      which(rowSums(full_states) >= min_richness),
+      existing_state_idxs)
   }
   # Catch exception
   else {
@@ -153,8 +177,17 @@ generate_rows_train <- function(
     return(NULL)
   }
 
+  # Exit if requested training size is 0
+  if (length(sampling_idxs) == 0) {
+    print(paste(
+      'No points for sampling, skipping schema:', 
+      experimental_design
+    ))
+    return(NULL)
+  }
+
   # Exit if requested training size is too large
-  if (training_sample_size > length(sampling_rows)) {
+  if (training_sample_size > length(sampling_idxs)) {
     print(paste(
       'Too many points requested for sampling, skipping schema:', 
       experimental_design
@@ -163,27 +196,27 @@ generate_rows_train <- function(
   }
 
   # Return sampled rows
-  return(sample(x = sampling_rows, size = training_sample_size))
+  return(sample(x = sampling_idxs, size = training_sample_size))
 }
 
-generate_rows_test <- function(
+generate_state_idxs_test <- function(
   experimental_design, 
-  assemblages, 
   num_test,
+  assemblages,
   num_species,
-  skip_specific_states_rows = NULL) {
+  skip_specific_state_idxs = NULL) {
   # The full list of testing candidates
-  test_candidates_indices = 1:nrow(assemblages)
+  test_candidates_idxs = unique(assemblages[,'state_idx'])
 
-  # If skipping specific states (for instance, single species & leave one out rows)
-  if (!is.null(skip_specific_states_rows)) {
+  # If skipping specific states
+  if (!is.null(skip_specific_state_idxs)) {
     # Take the set difference
-    test_candidates_indices = setdiff(
-      test_candidates_indices, skip_specific_states_rows)
+    test_candidates_idxs = setdiff(
+      test_candidates_idxs, skip_specific_state_idxs)
   }
 
   # Early break for edge cases
-  num_filtered_test = min(num_test, length(test_candidates_indices), nrow(assemblages))
+  num_filtered_test = min(num_test, length(test_candidates_idxs), 2^num_species)
   if (num_filtered_test == 0) {
     print(paste(
       'No test points generated, skipping schema:', 
@@ -193,11 +226,25 @@ generate_rows_test <- function(
   }
 
   # Get the testing rows
-  rows_test = sample(
-    x = test_candidates_indices, 
+  state_idxs_test = sample(
+    x = test_candidates_idxs, 
     size = num_filtered_test)
 
-  return(rows_test)
+  return(state_idxs_test)
+}
+
+get_rows_from_state_idxs <- function(
+  state_idxs,
+  assemblages) {
+  # Filter the assemblages rows with state idx match
+  return(which(assemblages[,'state_idx'] %in% state_idxs))
+}
+
+get_assemblages_subset_from_state_idxs <- function(
+  state_idxs,
+  assemblages) {
+  # Filter the assemblages with state idx match
+  return(assemblages %>% filter(state_idx %in% state_idxs))
 }
 
 process_data_features <- function(
@@ -246,11 +293,12 @@ process_data_features <- function(
 fit_rf_classifier_singlevar <- function(
   predictor_variable,
   assemblages,
-  training_rows,
+  training_state_idxs,
   method,
   num_species) {
-  # Get training data
-  data_training = assemblages[training_rows,]
+  # Get the training data
+  data_training = get_assemblages_subset_from_state_idxs(
+    training_state_idxs, assemblages)
 
   # Get the RF formula for fitting
   formula_rf_model = formula(sprintf(
@@ -276,7 +324,7 @@ fit_rf_classifier_singlevar <- function(
 
   rf_wrapper = list(
     "model" = rf_model,
-    "training_rows" = training_rows
+    "training_state_idxs" = training_state_idxs
   )
 
   return(rf_wrapper)
@@ -285,14 +333,15 @@ fit_rf_classifier_singlevar <- function(
 fit_rf_classifier_multivar <- function(
   predictor_variable,
   assemblages,
-  training_rows,
+  training_state_idxs,
   method,
   num_species) {
-  # Get training data
-  data_training = assemblages[training_rows,]
+  # Get the training data
+  data_training = get_assemblages_subset_from_state_idxs(
+    training_state_idxs, assemblages)
 
   # Get columns for composition and abundance
-  predictor_columns = get_predictor_columns(predictor_variable, data_training, method)
+  predictor_columns = get_predictor_columns(predictor_variable, assemblages, method)
 
   # Get the RF formula for fitting
   formula_rf_model = formula(sprintf(
@@ -303,7 +352,7 @@ fit_rf_classifier_multivar <- function(
 
   # Process data for multivar classification
   data_training_processed = process_data_features(
-    predictor_variable, method, data_training)
+    predictor_variable, data_training, method)
   
   # Generate RF model
   rf_model = rfsrc(
@@ -318,7 +367,7 @@ fit_rf_classifier_multivar <- function(
 
   rf_wrapper = list(
     "model" = rf_model,
-    "training_rows" = training_rows
+    "training_state_idxs" = training_state_idxs
   )
 
   return(rf_wrapper)
@@ -327,7 +376,7 @@ fit_rf_classifier_multivar <- function(
 fit_rf_classifier <- function(
   predictor_variable,
   assemblages,
-  training_rows,
+  training_state_idxs,
   method,
   num_species) {
   # Determine single vs. multi variable output
@@ -336,11 +385,11 @@ fit_rf_classifier <- function(
   # Pipeline for getting single vs. multi variable RF
   if (is_single_var) {
     return(fit_rf_classifier_singlevar(
-      predictor_variable, assemblages, training_rows, method, num_species))
+      predictor_variable, assemblages, training_state_idxs, method, num_species))
   }
   else {
     return(fit_rf_classifier_multivar(
-      predictor_variable, assemblages, training_rows, method, num_species))
+      predictor_variable, assemblages, training_state_idxs, method, num_species))
   }
 }
 
@@ -358,8 +407,8 @@ normalize_scores_sequential_rf <- function(scores) {
 estimate_uncertainty_sequential_rf <- function(
   predictor_variable,
   assemblages,
-  training_rows,
-  candidate_rows,
+  training_state_idxs,
+  candidate_state_idxs,
   method,
   num_species,
   hyperparams = MODEL_HYPERPARAMS) {
@@ -370,24 +419,25 @@ estimate_uncertainty_sequential_rf <- function(
   # Loop over each bootstrap fitting to obtain predictions
   for (iteration in 1:num_bootstrap) {
     # Bootstrap sample
-    bootstrap_training_rows = sample(
-      training_rows, replace = TRUE)
-
+    bootstrap_training_state_idxs = sample(
+      training_state_idxs, replace = TRUE)
+    
     # Fit rf model and predict
     bootstrap_rf_model = fit_rf_classifier(
-      predictor_variable, assemblages, bootstrap_training_rows, method, num_species)
+      predictor_variable, assemblages, bootstrap_training_state_idxs, method, num_species)
     bootstrap_predictions = predict_rf_classifier(
-      predictor_variable, bootstrap_rf_model, assemblages, candidate_rows, num_species)
-  
+      predictor_variable, bootstrap_rf_model, assemblages, candidate_state_idxs, num_species)
+
     # Append to boostrap predictions
     predictions_full[[iteration]] = bootstrap_predictions
+    prediction_rows = nrow(bootstrap_predictions)
     prediction_dims = ncol(bootstrap_predictions)
   }
 
   # Get the uncertainty score - MSE of bootstrap prediction
   predictions_full_multidim = array(
     unlist(predictions_full), 
-    dim = c(length(candidate_rows), prediction_dims, num_bootstrap))
+    dim = c(prediction_rows, prediction_dims, num_bootstrap))
   uncertainty_score = rowSums(apply(predictions_full_multidim, c(1, 2), var))
   
   # Normalize if needs be
@@ -399,13 +449,19 @@ estimate_uncertainty_sequential_rf <- function(
 }
 
 estimate_diversity_sequential_rf <- function(
-  select_candidate_data,
+  candidate_state_idxs,
+  assemblages, 
+  num_species,
   hyperparams = MODEL_HYPERPARAMS) {
+  # Get the full state grid and extract states
+  candidate_state = get_assemblages_subset_from_state_idxs(
+    candidate_state_idxs, assemblages)[,1:num_species]
+  
   # Get the nearest neighbors (k + 1 since self is included for cross-distance)
   nearest_k = hyperparams$sequential_rf$nearest_k
   nearest_neighbors_object = nn2(
-    select_candidate_data, 
-    query = select_candidate_data, 
+    candidate_state, 
+    query = candidate_state, 
     k = nearest_k + 1)
   
   # Get the diversity score (self-distance is 0 so we use k)
@@ -420,16 +476,24 @@ estimate_diversity_sequential_rf <- function(
 }
 
 estimate_density_sequential_rf <- function(
-  select_training_data,
-  select_candidate_data,
+  training_state_idxs,
+  candidate_state_idxs,
+  assemblages, 
+  num_species,
   hyperparams = MODEL_HYPERPARAMS) {
+  # Get the full state grid and extract states
+  candidate_state = get_assemblages_subset_from_state_idxs(
+    candidate_state_idxs, assemblages)[,1:num_species]
+  training_state = get_assemblages_subset_from_state_idxs(
+    training_state_idxs, assemblages)[,1:num_species]
+  
   # Get the nearest neighbor
   nearest_neighbors_object = nn2(
-    select_training_data, 
-    query = select_candidate_data, 
+    training_state, 
+    query = candidate_state, 
     k = 1)
   
-  # Get the density score (self-distance is 0 so we use k)
+  # Get the density score
   density_score = nearest_neighbors_object$nn.dists[,1]
 
   # Normalize if needs be
@@ -443,27 +507,28 @@ estimate_density_sequential_rf <- function(
 estimate_best_candidates_sequential_rf <- function(
   predictor_variable,
   assemblages,
-  training_rows,
-  batch_size,
+  training_state_idxs,
+  batch_size, 
+  method,
   num_species,
   hyperparams = MODEL_HYPERPARAMS) {
   # Set up comparison variables
   highest_score_min_heap = fibonacci_heap("numeric")
-  candidate_rows = setdiff(
-      1:nrow(assemblages), training_rows)
-  # TODO: Need some way of getting candidates so that the assemblage doesn't overlap...
+  candidate_state_idxs = setdiff(
+      unique(assemblages[,'state_idx']), training_state_idxs)
+  candidate_state = get_assemblages_subset_from_state_idxs(
+    candidate_state_idxs, assemblages)[,1:num_species]
   score_weights = hyperparams$sequential_rf$score_weights
-  select_training_data = assemblages[training_rows, 1:num_species]
-  select_candidate_data = assemblages[candidate_rows, 1:num_species]
-
+  
   # Get the scores
   uncertainty_score = estimate_uncertainty_sequential_rf(
-    predictor_variable, assemblages, training_rows, 
-    candidate_rows, method, num_species, hyperparams)
+    predictor_variable, assemblages, training_state_idxs, 
+    candidate_state_idxs, method, num_species, hyperparams)
   diversity_score = estimate_diversity_sequential_rf(
-    select_candidate_data, hyperparams)
+    candidate_state_idxs, assemblages, num_species, hyperparams)
   density_score = estimate_density_sequential_rf(
-    select_training_data, select_candidate_data, hyperparams)
+    training_state_idxs, candidate_state_idxs, assemblages, 
+    num_species, hyperparams)
   
   # Calculate the weighted score sum
   full_score = (
@@ -471,12 +536,28 @@ estimate_best_candidates_sequential_rf <- function(
     diversity_score * score_weights$diversity +
     density_score * score_weights$density
   )
-
-  # Get the batch_size amount of best elements (nice sorting trick)
-  full_score_sorted = order(full_score, decreasing = FALSE)
-  best_row_indices = candidate_rows[full_score_sorted[1:batch_size]]
   
-  return(best_row_indices)
+  # Get the batch_size amount of best elements
+  full_score_sorted = order(full_score, decreasing = TRUE)
+  scored_state = candidate_state[full_score_sorted,]
+  scored_state_with_idxs = get_state_assemblages_mapping(num_species, scored_state)
+  scored_state_idxs = unique(scored_state_with_idxs[,'state_idx'])
+  best_state_idxs = scored_state_idxs[1:min(batch_size, length(scored_state_idxs))]
+
+  return(best_state_idxs)
+}
+
+get_batch_sizes <- function(
+  num_samples,
+  num_parts) {
+  # Calculate the batch split
+  lower_batch = floor(num_samples / num_parts)
+  batch_remainder = (num_samples %% num_parts)
+  batch_size_vec = rep(lower_batch, num_parts)
+  if (batch_remainder > 0) {
+    batch_size_vec[1:batch_remainder] = lower_batch + 1
+  }
+  return(batch_size_vec)
 }
 
 fit_sequential_rf_classifier <- function(
@@ -484,30 +565,34 @@ fit_sequential_rf_classifier <- function(
   method,
   assemblages,
   num_train,
-  training_rows,
+  training_state_idxs,
   num_species,
   hyperparams = MODEL_HYPERPARAMS) {
   # Initial setup of training rows and other variables
-  sequential_training_rows = training_rows
+  sequential_training_state_idxs = training_state_idxs
   sequential_rf_iterations = hyperparams$sequential_rf$iterations
-  batch_size = floor(
-    (num_train - length(training_rows)) / 
-    sequential_rf_iterations
-  )
+  max_states = length(unique(assemblages[,'state_idx']))
+  batch_size_vec = get_batch_sizes(
+    (num_train - length(training_state_idxs)),
+    sequential_rf_iterations)
 
   for (iteration in 1:sequential_rf_iterations) {
     # Get the best improvement points
-    best_row_indices = estimate_best_candidates_sequential_rf(
+    batch_size = batch_size_vec[iteration]
+    best_state_idxs = estimate_best_candidates_sequential_rf(
       predictor_variable, assemblages, 
-      sequential_training_rows, batch_size, num_species, hyperparams)
+      sequential_training_state_idxs, batch_size, method,
+      num_species, hyperparams)
+      
     # Update the sequential training rows
-    sequential_training_rows = union(
-      sequential_training_rows, best_row_indices)
+    sequential_training_state_idxs = union(
+      sequential_training_state_idxs, best_state_idxs)
+    if (length(sequential_training_state_idxs) == max_states) {break}
   }
 
   # Final fitting of random forest
   sequential_rf_wrapper = fit_rf_classifier(
-    predictor_variable, assemblages, sequential_training_rows, method, num_species)
+    predictor_variable, assemblages, sequential_training_state_idxs, method, num_species)
 
   return(sequential_rf_wrapper)
 }
@@ -576,11 +661,12 @@ create_glv_dataset <- function(
 
 fit_glv_baseline <- function(
   assemblages,
-  training_rows,
+  training_state_idxs,
   num_species,
   hyperparams = MODEL_HYPERPARAMS) {
-  # Subset the assemblage for training and process it
-  assemblages_training = assemblages[training_rows,]
+  # Get the training data
+  assemblages_training = get_assemblages_subset_from_state_idxs(
+    training_state_idxs, assemblages)
   glv_training = create_glv_dataset(
     assemblages_training, num_species)
 
@@ -596,7 +682,7 @@ fit_glv_baseline <- function(
   # Return the wrapper
   glv_wrapper = list(
     "model" = A_effective,
-    "training_rows" = training_rows
+    "training_state_idxs" = training_state_idxs
   )
 
   return(glv_wrapper)
@@ -610,7 +696,7 @@ fit_model <- function(
   predictor_variable,
   assemblages,
   num_train,
-  training_rows,
+  training_state_idxs,
   num_species,
   method,
   hyperparams = MODEL_HYPERPARAMS) {
@@ -619,24 +705,24 @@ fit_model <- function(
     # Naive fitting doesn't require model
     naive_wrapper = list(
       "model" = NULL,
-      "training_rows" = training_rows
+      "training_state_idxs" = training_state_idxs
     )
     return(naive_wrapper)
   }
   else if (method == "rf") {
     # Random forest prediction
     return(fit_rf_classifier(
-      predictor_variable, assemblages, training_rows, method, num_species))
+      predictor_variable, assemblages, training_state_idxs, method, num_species))
   }
   else if (method == "residual_rf") {
     # Random forest prediction
     return(fit_rf_regressor(
-      predictor_variable, assemblages, training_rows, method, num_species))
+      predictor_variable, assemblages, training_state_idxs, method, num_species))
   }
   else if (method == "sequential_rf") {
     # Sequential fitting random forest prediction
     return(fit_sequential_rf_classifier(
-      predictor_variable, assemblages, num_train, training_rows, method, num_species))
+      predictor_variable, method, assemblages, num_train, training_state_idxs, num_species))
   }
   else {
     print(paste("Invalid fitting method:", method))
@@ -648,27 +734,35 @@ predict_rf_classifier_singlevar <- function(
   predictor_variable,
   rf_model,
   assemblages,
-  predict_rows,
+  predict_state_idxs,
   num_species) {
+  # Get the prediction data
+  data_predict = get_assemblages_subset_from_state_idxs(
+    predict_state_idxs, assemblages)
+
   # Predict all values
   values_predicted = predict(
     rf_model$model, 
-    assemblages[predict_rows,]
+    data_predict
   )$predictions
   
-  return(values_predicted)
+  return(data.frame("pred"=values_predicted))
 }
 
 predict_rf_classifier_multivar <- function(
   predictor_variable,
   rf_model,
   assemblages,
-  predict_rows,
+  predict_state_idxs,
   num_species) {
+  # Get the prediction data
+  data_predict = get_assemblages_subset_from_state_idxs(
+    predict_state_idxs, assemblages)[, 1:num_species]
+
   # Predict all values
   values_predicted_raw = predict(
     object = rf_model$model, 
-    newdata = assemblages[predict_rows, 1:num_species]
+    newdata = data_predict
   )
   # Process the predicted values
   if (predictor_variable == "_composition") {
@@ -699,7 +793,7 @@ predict_rf_classifier <- function(
   predictor_variable,
   rf_model,
   assemblages,
-  predict_rows,
+  predict_state_idxs,
   num_species) {
   # Determine single vs. multi variable output
   is_single_var = !(predictor_variable %in% c("_abundance", "_composition"))
@@ -707,25 +801,29 @@ predict_rf_classifier <- function(
   # Pipeline for getting single vs. multi variable RF
   if (is_single_var) {
     return(predict_rf_classifier_singlevar(
-      predictor_variable, rf_model, assemblages, predict_rows, num_species))
+      predictor_variable, rf_model, assemblages, predict_state_idxs, num_species))
   }
   else {
     return(predict_rf_classifier_multivar(
-      predictor_variable, rf_model, assemblages, predict_rows, num_species))
+      predictor_variable, rf_model, assemblages, predict_state_idxs, num_species))
   }
 }
 
 predict_naive_singlevar <- function(
   predictor_variable,
   assemblages,
-  predict_rows,
+  predict_state_idxs,
   num_species) {
+  # Get the prediction data
+  data_predict = get_assemblages_subset_from_state_idxs(
+    predict_state_idxs, assemblages)
+
   # Predict all values
-  if (is.factor(assemblages[predict_rows, predictor_variable])) {
+  if (is.factor(data_predict[, predictor_variable])) {
     # Randomly sample values of the factor from the training data
     values_predicted = sample(
       x = assemblages[,predictor_variable], 
-      size = length(predict_rows),
+      size = nrow(data_predict),
       replace = TRUE
     )
   }
@@ -734,11 +832,11 @@ predict_naive_singlevar <- function(
     if (predictor_variable == "richness") {
       # Use training data richness
       values_predicted = apply(
-        assemblages[predict_rows, 1:num_species], 1, sum)
+        data_predict[, 1:num_species], 1, sum)
     }
     # Pick mean value of the continuous variable
     else {
-      values_predicted = mean(assemblages[predict_rows, predictor_variable])
+      values_predicted = mean(data_predict[, predictor_variable])
     }
   }
   
@@ -748,20 +846,24 @@ predict_naive_singlevar <- function(
 predict_naive_multivar <- function(
   predictor_variable,
   assemblages,
-  predict_rows,
+  predict_state_idxs,
   method,
   num_species) {
+  # Get the prediction data
+  data_predict = get_assemblages_subset_from_state_idxs(
+    predict_state_idxs, assemblages)
+
   # Get columns for composition and abundance
   predictor_columns = get_predictor_columns(predictor_variable, assemblages, method)
 
   # If composition use the input presence/absences
   if (predictor_variable == "_composition") {
-    values_predicted = (assemblages[predict_rows, 1:num_species] > 0)
+    values_predicted = (data_predict[, 1:num_species] > 0)
   }
   # If abundance use the mean training values masked by the input presence/absences
   else if (predictor_variable == "_abundance") {
-    values_predicted = (assemblages[predict_rows, 1:num_species] * 
-      colMeans(assemblages[predict_rows, predictor_columns]))
+    values_predicted = (data_predict[, 1:num_species] * 
+      colMeans(data_predict[, predictor_columns]))
   }
   else {
     print(paste("Error, predictor variable is not valid:", predictor_variable))
@@ -774,7 +876,7 @@ predict_naive_multivar <- function(
 predict_naive <- function(
   predictor_variable,
   assemblages,
-  predict_rows,
+  predict_state_idxs,
   method,
   num_species) {
   # Determine single vs. multi variable output
@@ -783,11 +885,11 @@ predict_naive <- function(
   # Pipeline for getting single vs. multi variable RF
   if (is_single_var) {
     return(predict_naive_singlevar(
-      predictor_variable, assemblages, predict_rows, method, num_species))
+      predictor_variable, assemblages, predict_state_idxs, num_species))
   }
   else {
     return(predict_naive_multivar(
-      predictor_variable, assemblages, predict_rows, method, num_species))
+      predictor_variable, assemblages, predict_state_idxs, method, num_species))
   }
 }
 
@@ -823,15 +925,19 @@ predict_glv_row <- function(
 predict_glv <- function(
   glv_wrapper,
   assemblages,
-  predict_rows,
+  predict_state_idxs,
   num_species) {
+  # Get the prediction data
+  data_predict = get_assemblages_subset_from_state_idxs(
+    predict_state_idxs, assemblages)
+
   # Predict using fitted GLV model for each row
   values_predicted = do.call(
     rbind,
     lapply(
-      predict_rows,
+      1:nrow(data_predict),
       function(x) predict_glv_row(
-        glv_wrapper, assemblages, x, num_species)
+        glv_wrapper, data_predict, x, num_species)
     )
   )
 
@@ -842,7 +948,7 @@ predict_model <- function(
   predictor_variable,
   rf_model,
   assemblages,
-  predict_rows,
+  predict_state_idxs,
   method,
   num_species,
   hyperparams = MODEL_HYPERPARAMS) {
@@ -850,13 +956,13 @@ predict_model <- function(
   if (method == "naive") {
     # Naive prediction
     return(predict_naive(
-      predictor_variable, assemblages, predict_rows, method, num_species))
+      predictor_variable, assemblages, predict_state_idxs, method, num_species))
   }
   else if (method == "rf" || method == "sequential_rf") {
     # Random forest prediction - same for sequential.
     # Since they both output same RF classifiers, just trained differently
     return(predict_rf_classifier(
-      predictor_variable, rf_model, assemblages, predict_rows, num_species))
+      predictor_variable, rf_model, assemblages, predict_state_idxs, num_species))
   }
   else {
     print(paste("Invalid predicting method:", method))
@@ -867,18 +973,22 @@ predict_model <- function(
 get_ground_truth_values <- function(
   predictor_variable,
   assemblages,
-  predict_rows,
+  predict_state_idxs,
   method,
   num_species) {
+  # Get the prediction data
+  data_predict = get_assemblages_subset_from_state_idxs(
+    predict_state_idxs, assemblages)
+
   # Get columns for composition and abundance
   predictor_columns = get_predictor_columns(predictor_variable, assemblages, method)
   
   # Process the ground truth values
   if (predictor_variable == "_composition") {
-    values_ground_truth = (assemblages[predict_rows, 1:num_species] > 0)
+    values_ground_truth = (data_predict[, 1:num_species] > 0)
   }
   else if (predictor_variable %in% c("_abundance", "richness")) {
-    values_ground_truth = assemblages[predict_rows, predictor_columns]
+    values_ground_truth = data_predict[, predictor_columns]
   }
   else {
     print(paste("Error, predictor variable is not valid:", predictor_variable))
@@ -911,7 +1021,7 @@ evaluate_mean_absolute_error_singlevar <- function(
   values_predicted,
   values_ground_truth) {
   return(mean_absolute_error(
-    pred = values_predicted, 
+    pred = as.numeric(unlist(values_predicted)), 
     obs = values_ground_truth
   ))
 }
@@ -1028,28 +1138,24 @@ perform_prediction_experiment_single <- function(
   predictor_variable,
   assemblages, 
   num_train,
-  rows_train,
-  rows_test, 
+  state_idxs_train,
+  state_idxs_test,
   method, 
   num_species) {
   # If there is no training data, just exit early
-  if (length(rows_train)==0) {
+  if (length(state_idxs_train)==0) {
     return(NULL)
   }
 
-  # Get training & testing data
-  data_train = assemblages[rows_train,]
-  data_test = assemblages[rows_test,]
-
   # Fit a model with the wrapper
   fitted_model = fit_model(
-    predictor_variable, assemblages, num_train, rows_train, num_species, method)
+    predictor_variable, assemblages, num_train, state_idxs_train, num_species, method)
 
   # Make predictions on both training and testing data
   model_predictions_train = predict_model(
-    predictor_variable, fitted_model, assemblages, fitted_model$training_rows, method, num_species)
+    predictor_variable, fitted_model, assemblages, fitted_model$training_state_idxs, method, num_species)
   model_predictions_test = predict_model(
-    predictor_variable, fitted_model, assemblages, rows_test, method, num_species)
+    predictor_variable, fitted_model, assemblages, state_idxs_test, method, num_species)
 
   # Early exit if predictions are not valid
   if (is.null(model_predictions_train) || is.null(model_predictions_test)) {
@@ -1058,9 +1164,9 @@ perform_prediction_experiment_single <- function(
 
   # Get ground truth labels and values
   ground_truth_train = get_ground_truth_values(
-    predictor_variable, assemblages, fitted_model$training_rows, method, num_species)
+    predictor_variable, assemblages, fitted_model$training_state_idxs, method, num_species)
   ground_truth_test = get_ground_truth_values(
-    predictor_variable, assemblages, rows_test, method, num_species)
+    predictor_variable, assemblages, state_idxs_test, method, num_species)
   
   # Gather statistics
   prediction_statistics_train = evaluate_statistics(
@@ -1113,12 +1219,12 @@ write_to_csv_file <- function(
 }
 
 evaluate_initial_final_difference <- function(
-  evaluate_rows,
+  data_train,
   assemblages,
   num_species) {
   # Get outcomes
-  initial_conditions = assemblages[evaluate_rows, 1:num_species] %>% as.matrix
-  final_abundances = assemblages[evaluate_rows,] %>% 
+  initial_conditions = data_train[, 1:num_species] %>% as.matrix
+  final_abundances = data_train %>% 
     select(contains("star")) %>% as.matrix
   
   # Count # of species that were present but went absent
@@ -1155,6 +1261,7 @@ perform_prediction_experiment_parallel_wrapper <- function(
   directory_string,
   dataset_name,
   num_species,
+  num_replicates_in_data,
   index,
   assemblages,
   results_table) {
@@ -1164,27 +1271,40 @@ perform_prediction_experiment_parallel_wrapper <- function(
   replicate_index = results_table$replicate_index[index]
   method = results_table$method[index]
   experimental_design = results_table$experimental_design[index]
+  existing_state_idxs = unique(assemblages[,'state_idx'])
   
+  # Subsample assemblage with desired replicates
+  assemblages = assemblages %>% 
+    slice_sample(n = num_replicates_in_data, by = state_idx)
+
   # Get training & testing set
-  rows_train = generate_rows_train(
+  state_idxs_train = generate_state_idxs_train( 
     experimental_design, num_train, assemblages, method, num_species)
-  rows_test = generate_rows_test(
-    experimental_design, assemblages, num_test, num_species,
-    skip_specific_states_rows = rows_train)
-  results_table$num_test[index] = length(rows_test)
+  state_idxs_test = generate_state_idxs_test( 
+    experimental_design, num_test, assemblages, num_species)
+  results_table$num_test[index] = length(state_idxs_test)
 
   # Early exit
-  if (is.null(rows_train) || is.null(rows_test)) {
+  if (is.null(state_idxs_train) || is.null(state_idxs_test)) {
+    return(NULL)
+  }
+  else if (length(existing_state_idxs) < num_train) {
     return(NULL)
   }
 
+  # Get the rows for printing out
+  data_train = get_assemblages_subset_from_state_idxs(
+    state_idxs_train, assemblages)
+  data_test = get_assemblages_subset_from_state_idxs(
+    state_idxs_test, assemblages)
+
   # Save train and test data to file
   write_to_csv_file(
-    assemblages[rows_train,], directory_string, dataset_name, 
+    data_train, directory_string, dataset_name, 
     index, method, replicate_index, num_train, 
     experimental_design, "abundance", "experiment_train")
   write_to_csv_file(
-    assemblages[rows_test,], directory_string, dataset_name, 
+    data_test, directory_string, dataset_name, 
     index, method, replicate_index, num_train, 
     experimental_design, "abundance", "experiment_test")
   
@@ -1192,7 +1312,8 @@ perform_prediction_experiment_parallel_wrapper <- function(
   for (response in c("_abundance", "_composition", "richness")) {
     response_save = gsub("_", "", response, fixed = TRUE)
     experiment_result = perform_prediction_experiment_single(
-      response, assemblages, num_train, rows_train, rows_test, 
+      response, assemblages, num_train, 
+      state_idxs_train, state_idxs_test,
       method, num_species)
     
     # Early exit if results are not valid
@@ -1235,8 +1356,10 @@ perform_prediction_experiment_parallel_wrapper <- function(
     
     # Save the final training set if sequential
     if (method == "sequential_rf") {
+      data_train_sequential = get_assemblages_subset_from_state_idxs(
+        experiment_result$model$training_state_idxs, assemblages)
       write_to_csv_file(
-        assemblages[experiment_result$model$training_rows,], 
+        data_train_sequential, 
         directory_string, dataset_name, 
         index, method, replicate_index, num_train, 
         experimental_design, "abundance", 
@@ -1246,7 +1369,7 @@ perform_prediction_experiment_parallel_wrapper <- function(
 
   # Get the difference statistics
   difference_stats_train = evaluate_initial_final_difference(
-    rows_train, assemblages, num_species)
+    data_train, assemblages, num_species)
   
   # Record to table
   results_table$num_losses_mean[index] = difference_stats_train$num_losses_mean
@@ -1283,6 +1406,9 @@ perform_prediction_experiment_full <- function(
   # Make the giant results table
   results_table = expand.grid(replicate_index=1:num_replicates_in_fitting, 
                               method=method_list,
+                              experimental_design=experimental_design_list,
+                              num_train=sample_size_seq_all,
+                              num_test=num_test, 
                               richness_mae_test=NA,
                               feasible_and_stable_balanced_accuracy_test=NA,
                               composition_balanced_accuracy_mean_test=NA,
@@ -1291,9 +1417,6 @@ perform_prediction_experiment_full <- function(
                               feasible_and_stable_balanced_accuracy_train=NA,
                               composition_balanced_accuracy_mean_train=NA,
                               abundance_mae_mean_train=NA,
-                              experimental_design=experimental_design_list,
-                              num_train=sample_size_seq_all,
-                              num_test=num_test, 
                               num_species_dataset=NA,
                               num_replicates_dataset=NA,
                               num_cases_dataset=NA,
@@ -1311,20 +1434,41 @@ perform_prediction_experiment_full <- function(
     results_list = mclapply(indices, function(index) {
       perform_prediction_experiment_parallel_wrapper(
         directory_string, dataset_name, num_species, 
-        index, assemblages, results_table)
-    }, mc.cores = CORES)
+        num_replicates_in_data, index, 
+        assemblages, results_table)
+    }, mc.cores = CORES, mc.preschedule = FALSE)
   }
   else {
-    results_list = lapply(indices, function(index) {
+    print(length(indices))
+    for (index in indices) {
+      print(index)
+      print(results_table[index,])
       perform_prediction_experiment_parallel_wrapper(
         directory_string, dataset_name, num_species, 
-        index, assemblages, results_table)
-    })
+        num_replicates_in_data, index, 
+        assemblages, results_table)
+    }
+    # results_list = lapply(indices, function(index) {
+    #   perform_prediction_experiment_parallel_wrapper(
+    #     directory_string, dataset_name, num_species, 
+    #     num_replicates_in_data, index, 
+    #     assemblages, results_table)
+    # })
   }
+  # Get indices with errors
+  indices_errors = which(sapply(results_list, class) == "try-error")
+  indices_skipped = which(sapply(results_list, class) == "null")
+  indices_good = which(sapply(results_list, class) == "data.frame")
   
+  # Print indices with errors
+  if (length(indices_errors) > 0) {
+    print(paste("Indices with errors: ", paste(indices_errors, collapse = ', ')))
+    print(results_list[indices_errors])
+  }
+
   # Write results table
   results_df = NULL
-  try(results_df <- rbindlist(results_list))
+  try(results_df <- rbindlist(results_list[indices_good]))
   if (!is.null(results_df)) {
     write.csv(
       results_df, file=sprintf('outputs/statistical/results_%s.csv',dataset_name), 
@@ -1334,14 +1478,6 @@ perform_prediction_experiment_full <- function(
   # Save the raw output too in case of a rbind issue for error checking
   saveRDS(results_list, file = sprintf(
     'outputs/statistical/results_%s.Rdata', dataset_name))
-  
-  # Get indices with errors
-  indices_errors = which(sapply(results_list, class) == "try-error")
-  if (length(indices_errors) > 0) {
-    print(data.frame(indices_errors, sapply(indices_errors, function(j) { 
-      attr(results_list[[j]], "condition")
-    })))
-  }
   
   return(results_list)  
 }

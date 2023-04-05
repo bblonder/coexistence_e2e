@@ -28,7 +28,11 @@ test_existence_pred
 
 ####
 num_species = 5
-assemblages = read.csv('data/fly/data_fly.csv')
+input_file = read.csv('data/fly/data_fly.csv')
+num_species = 11
+input_file = read.csv('data/glv/assemblages_M_11.csv')
+assemblages = clean_input_data(input_file)
+assemblages = get_state_assemblages_mapping(num_species, assemblages)
 training_rows = 1:nrow(assemblages)
 predict_rows = 1:nrow(assemblages)
 
