@@ -724,6 +724,10 @@ fit_model <- function(
     return(fit_sequential_rf_classifier(
       predictor_variable, method, assemblages, num_train, training_state_idxs, num_species))
   }
+  else if (method == "glv") {
+    # GLV Fitting
+    return(fit_glv_baseline(assemblages, training_state_idxs, num_species))
+  }
   else {
     print(paste("Invalid fitting method:", method))
     return(NULL)
@@ -923,6 +927,7 @@ predict_glv_row <- function(
 }
 
 predict_glv <- function(
+  predictor_variable,
   glv_wrapper,
   assemblages,
   predict_state_idxs,
@@ -932,7 +937,7 @@ predict_glv <- function(
     predict_state_idxs, assemblages)
 
   # Predict using fitted GLV model for each row
-  values_predicted = do.call(
+  glv_predictions = do.call(
     rbind,
     lapply(
       1:nrow(data_predict),
@@ -941,12 +946,29 @@ predict_glv <- function(
     )
   )
 
+  # If composition use the input presence/absences
+  if (predictor_variable == "_composition") {
+    values_predicted = (glv_predictions > 0)
+  }
+  # If abundance use the mean training values masked by the input presence/absences
+  else if (predictor_variable == "_abundance") {
+    values_predicted = glv_predictions
+  }
+  else if (predictor_variable == "richness") {
+    values_predicted = rowSums(data_predict[, 1:num_species] > 0)
+  }
+  else {
+    print(paste("Error, predictor variable is not valid:", predictor_variable))
+    return(NULL)
+  }
+
   return(values_predicted)
 }
 
+
 predict_model <- function(
   predictor_variable,
-  rf_model,
+  model_wrapper,
   assemblages,
   predict_state_idxs,
   method,
@@ -962,7 +984,11 @@ predict_model <- function(
     # Random forest prediction - same for sequential.
     # Since they both output same RF classifiers, just trained differently
     return(predict_rf_classifier(
-      predictor_variable, rf_model, assemblages, predict_state_idxs, num_species))
+      predictor_variable, model_wrapper, assemblages, predict_state_idxs, num_species))
+  }
+  else if (method == "glv") {
+    return(predict_glv(
+      predictor_variable, model_wrapper, assemblages, predict_state_idxs, num_species))
   }
   else {
     print(paste("Invalid predicting method:", method))
@@ -1335,6 +1361,9 @@ perform_prediction_experiment_parallel_wrapper <- function(
       results_table$richness_mae_train[index] = experiment_result$mae_train
       results_table$richness_mae_test[index] = experiment_result$mae_test
     }
+    # print("====================")
+    # print(response)
+    # print(experiment_result)
 
     # Save relevant variables
     write_to_csv_file(
@@ -1439,21 +1468,21 @@ perform_prediction_experiment_full <- function(
     }, mc.cores = CORES, mc.preschedule = FALSE)
   }
   else {
-    print(length(indices))
-    for (index in indices) {
-      print(index)
-      print(results_table[index,])
-      perform_prediction_experiment_parallel_wrapper(
-        directory_string, dataset_name, num_species, 
-        num_replicates_in_data, index, 
-        assemblages, results_table)
-    }
-    # results_list = lapply(indices, function(index) {
+    # print(length(indices))
+    # for (index in indices) {
+    #   print(index)
+    #   print(results_table[index,])
     #   perform_prediction_experiment_parallel_wrapper(
     #     directory_string, dataset_name, num_species, 
     #     num_replicates_in_data, index, 
     #     assemblages, results_table)
-    # })
+    # }
+    results_list = lapply(indices, function(index) {
+      perform_prediction_experiment_parallel_wrapper(
+        directory_string, dataset_name, num_species, 
+        num_replicates_in_data, index, 
+        assemblages, results_table)
+    })
   }
   # Get indices with errors
   indices_errors = which(sapply(results_list, class) == "try-error")

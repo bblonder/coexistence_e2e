@@ -5,13 +5,13 @@
 # MIN_POINTS = 1e1
 # MAX_POINTS = 1e4
 CORES = 4
-REPLICATES = 10
-GRID_POINTS = 20
+REPLICATES = 5
+GRID_POINTS = 10
 MIN_POINTS = 1e1
 MAX_POINTS = 1e4
 # METHODS = c('rf')
 # EXPERIMENTAL_DESIGNS = c("high-1","high-2", "low-2","low-3", "mixed", "prior")
-METHODS = c('naive','rf','sequential_rf')
+METHODS = c('naive','rf','glv','sequential_rf')
 EXPERIMENTAL_DESIGNS = c("mixed", "prior")
 NUM_TEST = 100
 MODEL_HYPERPARAMS = list(
@@ -25,12 +25,12 @@ MODEL_HYPERPARAMS = list(
 
 # Debugging override
 if (DEBUG_MODE == TRUE) {
-  CORES = 4
-  REPLICATES = 1
+  CORES = 1
+  REPLICATES = 2
   GRID_POINTS = 5
   MIN_POINTS = 1e1
   MAX_POINTS = 1e4
   # METHODS = c('naive','rf','sequential_rf')
-  METHODS = c('sequential_rf')
-  EXPERIMENTAL_DESIGNS = c("prior")
+  METHODS = c('naive','rf','glv','sequential_rf')
+  EXPERIMENTAL_DESIGNS = c("mixed")
 }
