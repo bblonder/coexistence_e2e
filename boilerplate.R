@@ -1,7 +1,7 @@
 num_species = 12
 assemblages = read.csv('data/glv/assemblages_H_12.csv')
-# training_rows = 1:nrow(assemblages)
-training_rows = get_single_species_and_leave_one_out_rows(assemblages, num_species)
+training_rows = 1:nrow(assemblages)
+# training_rows = get_single_species_and_leave_one_out_rows(assemblages, num_species)
 
 initial_cols = 1:num_species
 existence_cols = names(assemblages)[grep("star", names(assemblages))]
@@ -27,16 +27,21 @@ test_existence
 test_existence_pred
 
 ####
-num_species = 5
-input_file = read.csv('data/fly/data_fly.csv')
-num_species = 11
-input_file = read.csv('data/glv/assemblages_M_11.csv')
+num_species = 8
+input_file = read.csv('data/friedman_gore/data_friedman_gore.csv')
 assemblages = clean_input_data(input_file)
 assemblages = get_state_assemblages_mapping(num_species, assemblages)
-training_rows = 1:nrow(assemblages)
-predict_rows = 1:nrow(assemblages)
+assemblages = assemblages %>% 
+  slice_sample(n = 2, by = state_idx)
+training_state_idxs = 1:2^num_species
+predict_state_idxs = 1:2^num_species
+assemblages_training = data.frame(
+  get_assemblages_subset_from_state_idxs(
+    training_state_idxs, assemblages))
 
-glv_wrapper = fit_glv_baseline(assemblages, training_rows, num_species)
-glv_predictions = predict_glv(glv_wrapper, assemblages, predict_rows, num_species)
+glv_wrapper = fit_glv_baseline(assemblages, training_state_idxs, num_species)
+glv_predictions = predict_glv("_abundance", glv_wrapper, assemblages, predict_state_idxs, num_species)
+assemblages_training[diff_columns] = assemblages_training[star_columns] - glv_predictions
 
-glv_predictions - assemblages[predict_rows, existence_cols]
+
+#####
