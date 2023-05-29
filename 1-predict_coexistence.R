@@ -7,7 +7,7 @@ dir.create(file.path(getwd(), 'outputs/statistical'), recursive = TRUE)
 directory_string = file.path(getwd(), 'outputs/statistical')
 
 # Load helpers and settings
-DEBUG_MODE = FALSE
+DEBUG_MODE = TRUE
 source('src/configs.R')
 source('src/coexistence_love.R')
 

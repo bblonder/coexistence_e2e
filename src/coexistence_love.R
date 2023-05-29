@@ -125,6 +125,12 @@ generate_state_idxs_train <- function(
   hyperparams = MODEL_HYPERPARAMS) {
   # Variable setup
   training_sample_size = num_train
+
+  # Augmentation for Sequential RF methods
+  if (method == "sequential_rf") {
+    training_sample_size = ceiling(num_train / (hyperparams$sequential_rf$iterations + 1))
+  }
+  
   # Extract the full states and the states that actually exist
   full_states = get_full_state_grid(num_species)
   existing_state_idxs = unique(assemblages[,'state_idx'])
@@ -398,6 +404,210 @@ fit_rf_classifier <- function(
   }
 }
 
+normalize_scores_sequential_rf <- function(scores) {
+  # Get the max and min
+  max_score = max(scores)
+  min_score = min(scores)
+
+  # Normalization
+  normalized_scores = (scores - min_score) / (max_score - min_score)
+
+  return(normalized_scores)
+}
+
+estimate_uncertainty_sequential_rf <- function(
+  predictor_variable,
+  assemblages,
+  training_state_idxs,
+  candidate_state_idxs,
+  method,
+  num_species,
+  hyperparams = MODEL_HYPERPARAMS) {
+  # Define the bootstrap variables
+  predictions_full = list()
+  num_bootstrap = hyperparams$sequential_rf$bootstrap
+
+  # Loop over each bootstrap fitting to obtain predictions
+  for (iteration in 1:num_bootstrap) {
+    # Bootstrap sample
+    bootstrap_training_state_idxs = sample(
+      training_state_idxs, replace = TRUE)
+
+    # Fit rf model and predict
+    bootstrap_rf_model = fit_rf_classifier(
+      predictor_variable, assemblages, bootstrap_training_state_idxs, method, num_species)
+    bootstrap_predictions = predict_rf_classifier(
+      predictor_variable, bootstrap_rf_model, assemblages, candidate_state_idxs, num_species)
+
+    # Append to boostrap predictions
+    predictions_full[[iteration]] = bootstrap_predictions
+    prediction_rows = nrow(bootstrap_predictions)
+    prediction_dims = ncol(bootstrap_predictions)
+  }
+
+  # Get the uncertainty score - MSE of bootstrap prediction
+  predictions_full_multidim = array(
+    unlist(predictions_full), 
+    dim = c(prediction_rows, prediction_dims, num_bootstrap))
+  uncertainty_score = rowSums(apply(predictions_full_multidim, c(1, 2), var))
+
+  # Normalize if needs be
+  if (hyperparams$sequential_rf$normalize) {
+    uncertainty_score = normalize_scores_sequential_rf(uncertainty_score) 
+  }
+
+  return(uncertainty_score)
+}
+
+estimate_diversity_sequential_rf <- function(
+  candidate_state_idxs,
+  assemblages, 
+  num_species,
+  hyperparams = MODEL_HYPERPARAMS) {
+  # Get the full state grid and extract states
+  candidate_state = get_assemblages_subset_from_state_idxs(
+    candidate_state_idxs, assemblages)[,1:num_species]
+
+  # Get the nearest neighbors (k + 1 since self is included for cross-distance)
+  nearest_k = hyperparams$sequential_rf$nearest_k
+  nearest_neighbors_object = nn2(
+    candidate_state, 
+    query = candidate_state, 
+    k = nearest_k + 1)
+
+  # Get the diversity score (self-distance is 0 so we use k)
+  diversity_score = rowSums(nearest_neighbors_object$nn.dists) / nearest_k
+
+  # Normalize if needs be
+  if (hyperparams$sequential_rf$normalize) {
+    diversity_score = normalize_scores_sequential_rf(diversity_score) 
+  }
+
+  return(diversity_score)
+}
+
+estimate_density_sequential_rf <- function(
+  training_state_idxs,
+  candidate_state_idxs,
+  assemblages, 
+  num_species,
+  hyperparams = MODEL_HYPERPARAMS) {
+  # Get the full state grid and extract states
+  candidate_state = get_assemblages_subset_from_state_idxs(
+    candidate_state_idxs, assemblages)[,1:num_species]
+  training_state = get_assemblages_subset_from_state_idxs(
+    training_state_idxs, assemblages)[,1:num_species]
+
+  # Get the nearest neighbor
+  nearest_neighbors_object = nn2(
+    training_state, 
+    query = candidate_state, 
+    k = 1)
+
+  # Get the density score
+  density_score = nearest_neighbors_object$nn.dists[,1]
+
+  # Normalize if needs be
+  if (hyperparams$sequential_rf$normalize) {
+    density_score = normalize_scores_sequential_rf(density_score) 
+  }
+
+  return(density_score)
+}
+
+estimate_best_candidates_sequential_rf <- function(
+  predictor_variable,
+  assemblages,
+  training_state_idxs,
+  batch_size, 
+  method,
+  num_species,
+  hyperparams = MODEL_HYPERPARAMS) {
+  # Set up comparison variables
+  highest_score_min_heap = fibonacci_heap("numeric")
+  candidate_state_idxs = setdiff(
+      unique(assemblages[,'state_idx']), training_state_idxs)
+  candidate_state = get_assemblages_subset_from_state_idxs(
+    candidate_state_idxs, assemblages)[,1:num_species]
+  score_weights = hyperparams$sequential_rf$score_weights
+
+  # Get the scores
+  uncertainty_score = estimate_uncertainty_sequential_rf(
+    predictor_variable, assemblages, training_state_idxs, 
+    candidate_state_idxs, method, num_species, hyperparams)
+  diversity_score = estimate_diversity_sequential_rf(
+    candidate_state_idxs, assemblages, num_species, hyperparams)
+  density_score = estimate_density_sequential_rf(
+    training_state_idxs, candidate_state_idxs, assemblages, 
+    num_species, hyperparams)
+
+  # Calculate the weighted score sum
+  full_score = (
+    uncertainty_score * score_weights$uncertainty +
+    diversity_score * score_weights$diversity +
+    density_score * score_weights$density
+  )
+
+  # Get the batch_size amount of best elements
+  full_score_sorted = order(full_score, decreasing = TRUE)
+  scored_state = candidate_state[full_score_sorted,]
+  scored_state_with_idxs = get_state_assemblages_mapping(num_species, scored_state)
+  scored_state_idxs = unique(scored_state_with_idxs[,'state_idx'])
+  best_state_idxs = scored_state_idxs[1:min(batch_size, length(scored_state_idxs))]
+
+  return(best_state_idxs)
+}
+
+get_batch_sizes <- function(
+  num_samples,
+  num_parts) {
+  # Calculate the batch split
+  lower_batch = floor(num_samples / num_parts)
+  batch_remainder = (num_samples %% num_parts)
+  batch_size_vec = rep(lower_batch, num_parts)
+  if (batch_remainder > 0) {
+    batch_size_vec[1:batch_remainder] = lower_batch + 1
+  }
+  return(batch_size_vec)
+}
+
+fit_sequential_rf_classifier <- function(
+  predictor_variable,
+  assemblages,
+  num_train,
+  training_state_idxs,
+  method,
+  num_species,
+  hyperparams = MODEL_HYPERPARAMS) {
+  # Initial setup of training rows and other variables
+  sequential_training_state_idxs = training_state_idxs
+  sequential_rf_iterations = hyperparams$sequential_rf$iterations
+  max_states = length(unique(assemblages[,'state_idx']))
+  batch_size_vec = get_batch_sizes(
+    (num_train - length(training_state_idxs)),
+    sequential_rf_iterations)
+
+  for (iteration in 1:sequential_rf_iterations) {
+    # Get the best improvement points
+    batch_size = batch_size_vec[iteration]
+    best_state_idxs = estimate_best_candidates_sequential_rf(
+      predictor_variable, assemblages, 
+      sequential_training_state_idxs, batch_size, method,
+      num_species, hyperparams)
+
+    # Update the sequential training rows
+    sequential_training_state_idxs = union(
+      sequential_training_state_idxs, best_state_idxs)
+    if (length(sequential_training_state_idxs) == max_states) {break}
+  }
+
+  # Final fitting of random forest
+  sequential_rf_wrapper = fit_rf_classifier(
+    predictor_variable, assemblages, sequential_training_state_idxs, method, num_species)
+
+  return(sequential_rf_wrapper)
+}
+
 vectorize_state_for_glv <- function (
   state_vec,
   initial_idx,
@@ -616,6 +826,11 @@ fit_model <- function(
   else if (method == "residual_rf") {
     # Random forest prediction
     return(fit_rf_regressor(assemblages, training_state_idxs, method, num_species))
+  }
+  else if (method == "sequential_rf") {
+    # Sequential fitting random forest prediction
+    return(fit_sequential_rf_classifier(
+      predictor_variable, assemblages, num_train, training_state_idxs, method, num_species))
   }
   else if (method == "glv") {
     # GLV Fitting
@@ -989,8 +1204,9 @@ predict_model <- function(
     return(predict_naive(
       predictor_variable, assemblages, predict_state_idxs, method, num_species))
   }
-  else if (method == "rf") {
-    # Random forest prediction
+  else if (method == "rf" || method == "sequential_rf") {
+    # Random forest prediction - same for sequential.
+    # Since they both output same RF classifiers, just trained differently
     return(predict_rf_classifier(
       predictor_variable, model, assemblages, predict_state_idxs, num_species))
   }
