@@ -10,7 +10,6 @@ library(parallel)
 library(data.table)
 library(e1071)
 library(vegan)
-library(datastructures)
 library(RANN)
 library(conflicted)
 conflict_prefer("union", "base")
@@ -130,6 +129,15 @@ generate_state_idxs_train <- function(
   if (method == "sequential_rf") {
     training_sample_size = ceiling(num_train / (hyperparams$sequential_rf$iterations + 1))
   }
+  if (method == "sequential_rf" && 
+      !(experimental_design %in% c("mixed", "prior"))) {
+    print(paste(
+      'Sequential RF does not support schema:', 
+      experimental_design
+    ))
+    return(NULL)
+  }
+    
   
   # Extract the full states and the states that actually exist
   full_states = get_full_state_grid(num_species)
@@ -138,20 +146,32 @@ generate_state_idxs_train <- function(
   # Biased knowledge sampling from SP & LOO
   if (experimental_design == "prior") {
     prior_informed_training_idxs = get_single_species_and_leave_one_out_state_idxs(num_species)
-    if (length(prior_informed_training_idxs) > num_train) {
+    # If larger than requested, then subsample
+    if (length(prior_informed_training_idxs) >= training_sample_size) {
+      return(sample(
+        x = prior_informed_training_idxs, 
+        size = training_sample_size)
+      )
+    }
+    
+    # Sample further if quota not met
+    sampling_idxs = setdiff(existing_state_idxs, prior_informed_training_idxs)
+    supplement_size = training_sample_size - length(prior_informed_training_idxs)
+    
+    # Early exit if supplement is too large
+    if(supplement_size > length(sampling_idxs)) {
+      print(paste(
+        'Too many points requested for sampling, skipping schema:', 
+        experimental_design
+      ))
       return(NULL)
     }
-    # Early return is OK since this will always be less than the max size
-    if (training_sample_size > length(prior_informed_training_idxs)) {
-      sampling_idxs = setdiff(existing_state_idxs, prior_informed_training_idxs)
-      rest_sampled_idxs = sample(
-        x = sampling_idxs, 
-        size = training_sample_size - length(prior_informed_training_idxs))
-      return(union(prior_informed_training_idxs, rest_sampled_idxs))
-    }
-    else {
-      return(prior_informed_training_idxs)
-    }
+    
+    # Return the prior + supplement
+    rest_sampled_idxs = sample(
+      x = sampling_idxs, 
+      size = supplement_size)
+    return(union(prior_informed_training_idxs, rest_sampled_idxs))
   }
   # Uniform random sampling
   else if (experimental_design == "mixed") {
@@ -524,7 +544,6 @@ estimate_best_candidates_sequential_rf <- function(
   num_species,
   hyperparams = MODEL_HYPERPARAMS) {
   # Set up comparison variables
-  highest_score_min_heap = fibonacci_heap("numeric")
   candidate_state_idxs = setdiff(
       unique(assemblages[,'state_idx']), training_state_idxs)
   candidate_state = get_assemblages_subset_from_state_idxs(
@@ -1531,6 +1550,14 @@ perform_prediction_experiment_parallel_wrapper <- function(
   experimental_design = results_table$experimental_design[index]
   existing_state_idxs = unique(assemblages[,'state_idx'])
   
+  # Print for debugging purposes
+  print("--------------------------------------------")
+  cat(paste("Experiment: ",
+            "\n - Index/Replicate: ", index, " - ", replicate_index,
+            "\n - Training #: ", num_train,
+            "\n - Method & Design: ", method, " - ", experimental_design, "\n"
+  ))
+  
   # Subsample assemblage with desired replicates
   assemblages = assemblages %>% 
     slice_sample(n = num_replicates_in_data, by = state_idx)
@@ -1645,6 +1672,17 @@ perform_prediction_experiment_full <- function(
   min_points = MIN_POINTS,
   max_points = MAX_POINTS,
   parallelized = (CORES > 1)) {
+  print("=====================================================================")
+  cat(paste("Starting Experiments:",
+            "\n - Dataset: ", dataset_name,
+            "\n - Num Species: ", num_species,
+            "\n - Data Replicate: ", num_replicates_in_data,
+            "\n - Methods: ", paste(method_list, collapse = ', '), 
+            "\n - Experiments: ", paste(experimental_design_list, collapse = ', '), 
+            "\n - Experiment Replicate: ", num_replicates_in_fitting, "\n"
+  ))
+  print("=====================================================================")
+  
   # Clean data and prep
   assemblages = clean_input_data(input_file)
   assemblages = get_state_assemblages_mapping(num_species, assemblages)

@@ -1,5 +1,5 @@
 # Set working directory
-setwd("~/Dropbox/Berkeley/Research/Projects/Current/ecosys/coexistence_love")
+setwd("~/Documents/coexistence_love")
 
 # Setup output directory
 dir.create(file.path(getwd(), 'outputs/figures'), recursive = TRUE)
@@ -7,7 +7,7 @@ dir.create(file.path(getwd(), 'outputs/statistical'), recursive = TRUE)
 directory_string = file.path(getwd(), 'outputs/statistical')
 
 # Load helpers and settings
-DEBUG_MODE = TRUE
+DEBUG_MODE = FALSE
 source('src/configs.R')
 source('src/coexistence_love.R')
 
