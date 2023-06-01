@@ -3,7 +3,7 @@ library(reshape)
 library(dplyr)
 library(ggpubr)
 
-source('quantile_trim.R')
+source('utils/quantile_trim.R')
 
 plot_data <- function(data,name)
 {
@@ -46,31 +46,31 @@ plot_data <- function(data,name)
     theme(axis.text.x=element_blank()) +
     scale_y_continuous(expand=c(0,0),breaks=range(data_in$row))
   
-  ggsave(ggarrange(g_in, g_out,nrow=1,ncol=2,align='hv'),file=sprintf('outputs_figures/g_experiment_%s.png',name),width=6,height=6)
+  ggsave(ggarrange(g_in, g_out,nrow=1,ncol=2,align='hv'),file=sprintf('outputs/figures/g_experiment_%s.png',name),width=6,height=6)
 }
 
-try(dir.create('outputs_figures'))
+try(dir.create('outputs/figures'))
 
-data_assemblages_cedar_creek_18 = read.csv('data_cedar_creek/cedar_creek_2018.csv')
+data_assemblages_cedar_creek_18 = read.csv('data/cedar_creek/cedar_creek_2018.csv')
 g_cedar_creek = plot_data(data_assemblages_cedar_creek_18,'Cedar Creek')
 
-data_sortie_9_3 = read.csv('data_sortie/data_sortie.csv')
+data_sortie_9_3 = read.csv('data/sortie/data_sortie.csv')
 g_sortie = plot_data(data_sortie_9_3,'SORTIE')
 
-data_assemblages_H_12 = read.csv('data_glv/assemblages_H_12.csv')
+data_assemblages_H_12 = read.csv('data/glv/assemblages_H_12.csv')
 g_human_gut = plot_data(data_assemblages_H_12,'Human gut')
 
-data_assemblages_M_11 = read.csv('data_glv/assemblages_M_11.csv')
+data_assemblages_M_11 = read.csv('data/glv/assemblages_M_11.csv')
 g_mouse_gut = plot_data(data_assemblages_M_11,'Mouse gut')
 
-# data_assemblages_glv_16 = read.csv('data_glv/assemblages_glv_16.csv')
+# data_assemblages_glv_16 = read.csv('data/glv/assemblages_glv_16.csv')
 # g_glv_simulated = plot_data(data_assemblages_glv_16,'GLV simulated')
 
-data_annual_plant_18 = read.csv('data_annual_plant/assemblages_annual_plant_18.csv')
+data_annual_plant_18 = read.csv('data/annual_plant/assemblages_annual_plant_18.csv')
 g_annual_plant = plot_data(data_annual_plant_18,'Annual plant')
 
-data_fly_5 = read.csv('data_fly/data_fly.csv')
+data_fly_5 = read.csv('data/fly/data_fly.csv')
 g_fly = plot_data(data_fly_5,'Fly gut')
 
-data_soil_bacteria_8 = read.csv('data_friedman_gore/data_friedman_gore.csv')
+data_soil_bacteria_8 = read.csv('data/friedman_gore/data_friedman_gore.csv')
 g_soil_bacteria = plot_data(data_soil_bacteria_8,'Soil bacteria')

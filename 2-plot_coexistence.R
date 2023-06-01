@@ -13,12 +13,7 @@ library(vegan)
 library(RColorBrewer)
 library(MuMIn)
 
-if (!file.exists('outputs_figures'))
-{
-  dir.create('outputs_figures')
-}
-
-fn_outputs = dir('outputs_statistical',pattern="result.*\\.csv",full.names = TRUE)
+fn_outputs = dir('outputs/statistical',pattern="result.*\\.csv",full.names = TRUE)
 
 df_all = rbindlist(lapply(1:length(fn_outputs), function(i)
 {
@@ -43,14 +38,14 @@ nice_names = c(`annual_plant`="Annual plant",
 
 # add NA removal counts
 source('quantile_trim.R')
-fns = c(`cedar_creek_plants`='data_cedar_creek/cedar_creek_2018.csv', 
-        `sortie-nd_plants`='data_sortie/data_sortie.csv',
-        `human_gut`='data_glv/assemblages_H_12.csv',
-        `mouse_gut`='data_glv/assemblages_M_11.csv',
-        `glv_simulated`='data_glv/assemblages_glv_16.csv',
-        `annual_plant`='data_annual_plant/assemblages_annual_plant_18.csv',
-        `fly_gut`='data_fly/data_fly.csv',
-        `soil_bacteria`='data_friedman_gore/data_friedman_gore.csv')
+fns = c(`cedar_creek_plants`='data/cedar_creek/cedar_creek_2018.csv', 
+        `sortie-nd_plants`='data/sortie/data_sortie.csv',
+        `human_gut`='data/glv/assemblages_H_12.csv',
+        `mouse_gut`='data/glv/assemblages_M_11.csv',
+        `glv_simulated`='data/glv/assemblages_glv_16.csv',
+        `annual_plant`='data/annual_plant/assemblages_annual_plant_18.csv',
+        `fly_gut`='data/fly/data_fly.csv',
+        `soil_bacteria`='data/friedman_gore/data_friedman_gore.csv')
 
 row_counts = sapply(fns, function(x) {nrow(read.csv(x))})
 row_counts_trimmed = sapply(fns, function(x) {
@@ -84,7 +79,7 @@ df_all_stats = df_all %>%
          empirical) %>%
   unique %>%
   arrange(nice_name)
-write.csv(df_all_stats,'outputs_figures/table_dataset_stats.csv',row.names=F)
+write.csv(df_all_stats,'outputs/figures/table_dataset_stats.csv',row.names=F)
 
 
 
@@ -160,7 +155,7 @@ g_visreg_by_method = ggarrange(g_visreg_richness_method,
                                align='hv',
                                legend='bottom')
 ggsave(g_visreg_by_method, 
-       file='outputs_figures/g_visreg_by_method.png',
+       file='outputs/figures/g_visreg_by_method.png',
        width=7,height=8)
 
 plot_visreg_by_numtrain <- function(model, ylab, title)
@@ -191,7 +186,7 @@ g_visreg_by_numtrain = ggarrange(g_visreg_richness_numtrain,
                                  align='hv',
                                  legend='bottom')
 ggsave(g_visreg_by_numtrain, 
-       file='outputs_figures/g_visreg_by_numtrain.png',
+       file='outputs/figures/g_visreg_by_numtrain.png',
        width=7,height=8)
 
 
@@ -222,7 +217,7 @@ g_visreg_by_experimental_design = ggarrange(g_visreg_richness_experimental_desig
                                             common.legend = TRUE,
                                             align='hv',
                                             legend='bottom')
-ggsave(g_visreg_by_experimental_design, file='outputs_figures/g_visreg_by_experimental_design.png',width=7,height=8)
+ggsave(g_visreg_by_experimental_design, file='outputs/figures/g_visreg_by_experimental_design.png',width=7,height=8)
 
 
 
@@ -303,7 +298,7 @@ g_perf_dataset = ggarrange(plotlist=c(perf_dataset_richness$plots, perf_dataset_
           legend='bottom',
           labels=c('(a) Richness',rep("",3),'(b) Composition',rep("",3),'(c) Abundance',rep("",3)))
 
-ggsave(g_perf_dataset, file='outputs_figures/g_perf_dataset.png',
+ggsave(g_perf_dataset, file='outputs/figures/g_perf_dataset.png',
        width=11,height=9)
 
 r.squaredGLMM(perf_dataset_richness$model)
@@ -319,14 +314,14 @@ source('pick_datasets.R')
 source('log_seq.R')
 possible_num_train = ceiling(log_seq(1e1,1e4,length.out=20))
 
-cases = data.frame(name=names(nice_names[nice_names != "GLV simulated"]), fn_assemblages=c('data_annual_plant/assemblages_annual_plant_18.csv',
-                                                                                           'data_cedar_creek/cedar_creek_2018.csv',
-                                                                                           'data_fly/data_fly.csv',
-                                                                                           #'data_glv/assemblages_glv_16.csv',
-                                                                                           'data_glv/assemblages_H_12.csv',
-                                                                                           'data_glv/assemblages_M_11.csv',
-                                                                                           'data_sortie/data_sortie.csv',
-                                                                                           'data_friedman_gore/data_friedman_gore.csv'))
+cases = data.frame(name=names(nice_names[nice_names != "GLV simulated"]), fn_assemblages=c('data/annual_plant/assemblages_annual_plant_18.csv',
+                                                                                           'data/cedar_creek/cedar_creek_2018.csv',
+                                                                                           'data/fly/data_fly.csv',
+                                                                                           #'data/glv/assemblages_glv_16.csv',
+                                                                                           'data/glv/assemblages_H_12.csv',
+                                                                                           'data/glv/assemblages_M_11.csv',
+                                                                                           'data/sortie/data_sortie.csv',
+                                                                                           'data/friedman_gore/data_friedman_gore.csv'))
 
 # only do the complete sets
 dataset_ids_best_experiments = which(cases$name %in% c('annual_plant','human_gut','mouse_gut','sortie-nd_plants'))
@@ -548,7 +543,7 @@ ggsave(ggarrange(g_unwanted_all,
                  g_best_experiments_classification_statistics_total_abundance,
                  nrow=1,ncol=2,labels=c('b','c'),align='hv',common.legend = TRUE, legend='bottom'),
                  nrow=2,ncol=1,labels=c('a','')),
-       file='outputs_figures/g_best_experiments_classification_statistics.png',
+       file='outputs/figures/g_best_experiments_classification_statistics.png',
        width=8,height=6)
 
 
@@ -680,7 +675,7 @@ g_best_experiments_error_rates_all = ggarrange(plotlist=c(plots_best_experiments
                                                               legend='bottom',
                                                               align='hv')
 ggsave(g_best_experiments_error_rates_all,
-       file='outputs_figures/g_best_experiments_error_rates_all.png',
+       file='outputs/figures/g_best_experiments_error_rates_all.png',
        width=12,height=8,dpi=1200)
 
 
@@ -782,7 +777,7 @@ g_best_experiments_presence_absence_all = ggarrange(plotlist=c(plots_best_experi
 )
 
 ggsave(g_best_experiments_presence_absence_all,
-       file='outputs_figures/g_best_experiments_presence_absence_all.png',
+       file='outputs/figures/g_best_experiments_presence_absence_all.png',
        width=12,height=8,dpi=1200)
 
 
@@ -851,6 +846,6 @@ g_abundance_scatter = ggplot(predictions_abundance_all_for_scatter_small, aes(x=
   xlab('Abundance (predicted)') +
   ylab('Abundance (observed)')
 
-ggsave(g_abundance_scatter, file='outputs_figures/g_abundance_scatter.png',width=12,height=8)
+ggsave(g_abundance_scatter, file='outputs/figures/g_abundance_scatter.png',width=12,height=8)
   
 
