@@ -1641,6 +1641,12 @@ perform_prediction_experiment_parallel_wrapper <- function(
       experiment_result$obs_test, directory_string, dataset_name, 
       index, method, replicate_index, num_train, 
       experimental_design, response_save, "obs_test")
+    
+    # just for plotting
+    write_to_csv_file(
+      experiment_result$obs_test, directory_string, dataset_name, 
+      index, method, replicate_index, num_train, 
+      experimental_design, response_save, "obs_test")
   }
 
   # Get the difference statistics
