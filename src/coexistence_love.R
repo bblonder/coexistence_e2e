@@ -250,7 +250,8 @@ generate_state_idxs_test <- function(
   # Get the testing rows
   state_idxs_test = sample(
     x = test_candidates_idxs, 
-    size = num_filtered_test)
+    size = num_filtered_test,
+    replace = TRUE)
 
   return(state_idxs_test)
 }
