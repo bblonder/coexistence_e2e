@@ -251,8 +251,11 @@ generate_state_idxs_test <- function(
   state_idxs_test = sample(
     x = test_candidates_idxs, 
     size = num_filtered_test,
-    replace = TRUE)
-
+    replace = FALSE) # changed 08.04 from TRUE to false
+  
+  # 08.04 debug
+  # print(sprintf('num rows assemblages = %d, num test_candidates_idxs = %d, num state_idxs_test = %d',nrow(assemblages),length(test_candidates_idxs), length(state_idxs_test)))
+  
   return(state_idxs_test)
 }
 

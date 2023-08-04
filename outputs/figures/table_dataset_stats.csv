@@ -1,5 +1,4 @@
 "name_nice","num_species_dataset","num_cases","num_combos","abundance_q95_dataset","num_na","empirical","possible_num_combos"
-"Annual plant",18,262144,262144,4321.11280039314,23593,FALSE,262144
 "Cedar Creek",18,154,132,50.1839999999999,14,TRUE,262144
 "Fly gut",5,1536,32,537000,36,TRUE,32
 "Human gut",12,4096,4096,0.59065316553102,246,FALSE,4096

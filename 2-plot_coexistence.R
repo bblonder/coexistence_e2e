@@ -23,6 +23,12 @@ colorBlindBlack8  <- c("#000000", "#E69F00", "#56B4E9", "#009E73",
 
 
 ###
+if (!file.exists('outputs/figures'))
+{
+  dir.create('outputs/figures')  
+}
+
+###
 
 fn_outputs = dir('outputs/statistical',pattern="result.*\\.csv",full.names = TRUE)
 
@@ -49,25 +55,26 @@ names_nice = c(`annual_plant`="Annual plant",
 
 varnames_nice = c(experimental_design='Experimental design',
                   num_species_dataset='Dataset, total # species',
-                  type='Dataset type',
-                  num_losses_mean='# species lost',
+                  type='Dataset, type',
+                  num_losses_mean='Outcome, mean # species lost',
                   abundance_final_skewness_mean='Outcome, abundance skewness',
                   nice_name='Dataset'
                   )
 
-experimental_design_nice = c(prior='Singlets + 1-dropouts, then mixed',
-                             mixed='Mixed',
+experimental_design_nice = c(mixed='Mixed',
                              `low-2`='Doublets only',
                              `low-3`='Doublets + triplets only',
                              `high-1`='1-dropouts only',
-                             `high-2`='1-dropouts + 2-dropouts only')
+                             `high-2`='1-dropouts + 2-dropouts only',
+                             prior='Singlets + 1-dropouts, then mixed')
 
-methods_nice = c(naive=' Naïve (mean abundance) ',
+methods_nice = c(
                              rf='Random forest on experiments',
                              glv='GLV predictions',
                              glv_rf='Random forest on GLV residuals',
                              glv_rf_full='Random forest on experiments + GLV predictions',
-                             sequential_rf='Random forest, sequential')
+                             sequential_rf='Random forest, sequential',
+                             naive=' Naïve (mean abundance) ')
 
 # add NA removal counts
 source('utils/quantile_trim.R')
@@ -132,8 +139,8 @@ abundance_q95 = sapply(fns, function(x) {
 # add some additional info
 df_all = df_all_raw %>% 
   mutate(name_nice = names_nice[name]) %>%
-  mutate(experimental_design_nice = factor(experimental_design_nice[experimental_design])) %>%
-  mutate(method_nice = factor(methods_nice[method])) %>%  
+  mutate(experimental_design_nice = factor(experimental_design_nice[experimental_design],levels=experimental_design_nice,ordered=TRUE)) %>%
+  mutate(method_nice = factor(methods_nice[method],levels=methods_nice,ordered=TRUE)) %>%  
   
   mutate(empirical=name %in% c("cedar_creek_plants","fly_gut","soil_bacteria")) %>%
   mutate(num_na = num_nas[name]) %>%
@@ -176,40 +183,6 @@ write.csv(df_all_stats,'outputs/figures/table_dataset_stats.csv',row.names=F)
 
 
 
-### PERFORMANCE OVERALL
-
-#,levels=c('prior','mixed','low-2','low-3','high-1','high-2')
-
-
-
-
-
-# ggplot(df_all_for_regression %>%
-#          filter(num_train==30), 
-#        aes(x=experimental_design,
-#            y=abundance_mae_mean_test_scaled_clipped,
-#            color=name)) +
-#   geom_boxplot() +
-#   theme_bw() +
-#   facet_wrap(~method) +
-#   ylim(0,1)
-
-
-# # good plot
-# ggplot(df_all %>%
-#          filter(experimental_design=='mixed'), 
-#        aes(x=method_nice,
-#            y=abundance_mae_mean_test_scaled_clipped,
-#            color=factor(num_train))) +
-#   geom_boxplot() +
-#   theme_bw() +
-#   facet_wrap(~name_nice) +
-#   ylim(0,1) +
-#   #scale_x_discrete(drop=FALSE) +
-#   scale_color_viridis_d() +
-#   coord_flip()
-
-
 g_abundance_mae_mean_test_scaled_clipped_by_num_train = ggplot(df_all %>%
          filter(experimental_design=='mixed'), 
        aes(x=num_train,
@@ -242,142 +215,19 @@ g_abundance_mae_mean_test_scaled_clipped_by_experimental_design = ggplot(df_all 
   geom_boxplot() +
   theme_bw() +
   ylim(0,1) +
-  #facet_wrap(~,nrow=2) +
-  #scale_x_discrete(drop=FALSE) +
+  facet_wrap(~name_nice,nrow=2,scales='free') +
+  scale_x_discrete(drop=TRUE) +
   scale_color_brewer(palette='Set1',name='Experimental design') +
   scale_y_log10(breaks=c(0.01,0.05,0.1,0.2,1,2,10)) +
   xlab("Dataset") +
-  ylab("Mean absolute abundance error\nscaled by 95% quantile abundance in dataset") + 
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=0.9))
+  ylab("Mean absolute abundance error\nscaled by 95% quantile abundance in dataset") +
+  theme(axis.ticks.x=element_blank(),axis.text.x=element_blank())
+  #theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=0.9))
 ggsave(g_abundance_mae_mean_test_scaled_clipped_by_experimental_design, file='outputs/figures/g_abundance_mae_mean_test_scaled_clipped_by_experimental_design.pdf',
        width=9,height=5)
 
 
 
-message('make composition figures')
-
-
-# df_all_for_regression %>%
-#   filter(num_train==30) %>%
-#   filter(name=='Annual plant') %>%
-#   filter(experimental_design=='mixed') %>%
-#   filter(method=='glv_rf')
-# 
-
-
-
-
-
-
-
-# 
-# # fit models
-# m_richness_scaled_mae_test = lmer(richness_scaled_mae_test~method*log10(num_train)*experimental_design*name + (1|name),
-#                                   data=df_all_for_regression)
-# m_composition_balanced_accuracy_mean_test = lmer(oneminuscomposition_balanced_accuracy_mean_test~method*log10(num_train)*experimental_design*name + (1|name),
-#                                                  data=df_all_for_regression)
-# m_abundance_scaled_mae_test = lmer(abundance_scaled_mae_test~method*log10(num_train)*experimental_design*name + (1|name),
-#                                    data=df_all_for_regression %>% filter(method!="sequential_rf"))
-# 
-# r.squaredGLMM(m_richness_scaled_mae_test)
-# r.squaredGLMM(m_composition_balanced_accuracy_mean_test)
-# r.squaredGLMM(m_abundance_scaled_mae_test)
-# 
-# 
-# # q1a result
-# plot_visreg_by_method <- function(model, ylab, title)
-# {
-#   g_method = visreg(model, xvar='name',by='method',gg=TRUE,
-#                     cond=list(num_train=100,experimental_design='mixed'), 
-#                     overlay=TRUE, band=FALSE,
-#                     points=list(size=0.1)
-#   ) +
-#     theme_bw() +
-#     xlab('Dataset') +
-#     ylab(ylab) +
-#     labs(color='Method') +
-#     scale_color_manual(values=colorBlindBlack8) +
-#     ggtitle(title) +
-#     ylim(0,1)
-# }
-# 
-# g_visreg_richness_method = plot_visreg_by_method(m_richness_scaled_mae_test, "Scaled mean absolute error",title='Richness')
-# g_visreg_composition_method = plot_visreg_by_method(m_composition_balanced_accuracy_mean_test, "1 - balanced accuracy",title='Composition')
-# g_visreg_abundance_method = plot_visreg_by_method(m_abundance_scaled_mae_test, "Scaled mean absolute error",title='Abundance')
-# g_visreg_by_method = ggarrange(g_visreg_richness_method, 
-#                                g_visreg_composition_method,
-#                                g_visreg_abundance_method,
-#                                nrow=3,ncol=1,
-#                                labels='auto',
-#                                common.legend = TRUE,
-#                                align='hv',
-#                                legend='bottom')
-# ggsave(g_visreg_by_method, 
-#        file='outputs/figures/g_visreg_by_method.png',
-#        width=7,height=8)
-# 
-# plot_visreg_by_numtrain <- function(model, ylab, title)
-# {
-#   g_numtrain = visreg(model, xvar='num_train',by='name',gg=TRUE,
-#                       cond=list(method='love',experimental_design='mixed'),
-#                       overlay=TRUE, band=FALSE,
-#                       points=list(size=0.1)) +
-#     theme_bw()+
-#     scale_x_log10() +
-#     xlab('Number of training cases') +
-#     ylab(ylab) +
-#     labs(color='Dataset') +
-#     scale_color_manual(values=colorBlindBlack8) +
-#     ggtitle(title) +
-#     ylim(0,1)
-# }
-# 
-# g_visreg_richness_numtrain = plot_visreg_by_numtrain(m_richness_scaled_mae_test, "Scaled mean absolute error", "Richness")
-# g_visreg_composition_numtrain = plot_visreg_by_numtrain(m_composition_balanced_accuracy_mean_test, "1 - balanced accuracy", "Composition")
-# g_visreg_abundance_numtrain = plot_visreg_by_numtrain(m_abundance_scaled_mae_test, "Scaled mean absolute error", "Abundance")
-# g_visreg_by_numtrain = ggarrange(g_visreg_richness_numtrain,
-#                                  g_visreg_composition_numtrain,
-#                                  g_visreg_abundance_numtrain,
-#                                  nrow=3,ncol=1,
-#                                  labels='auto',
-#                                  common.legend = TRUE,
-#                                  align='hv',
-#                                  legend='bottom')
-# ggsave(g_visreg_by_numtrain, 
-#        file='outputs/figures/g_visreg_by_numtrain.png',
-#        width=7,height=8)
-# 
-# 
-# 
-# # now look at experimental design
-# plot_visreg_by_experimental_design <- function(model, ylab, title)
-# {
-#   g_experimental_design = visreg(model, xvar='name',by='experimental_design',gg=TRUE,
-#                                  cond=list(method='love',num_train=100),
-#                                  overlay=TRUE, band=FALSE,
-#                                  points=list(size=0.1)) +
-#     theme_bw() +
-#     xlab('Dataset') +
-#     ylab(ylab) +
-#     labs(color='Experimental design') +
-#     scale_color_manual(values=colorBlindBlack8) +
-#     ggtitle(title) +
-#     ylim(0,1)
-# }
-# g_visreg_richness_experimental_design = plot_visreg_by_experimental_design(m_richness_scaled_mae_test, "Scaled mean absolute error", "Richness")
-# g_visreg_composition_experimental_design = plot_visreg_by_experimental_design(m_composition_balanced_accuracy_mean_test, "1 - balanced accuracy", "Composition")
-# g_visreg_abundance_experimental_design = plot_visreg_by_experimental_design(m_abundance_scaled_mae_test, "Scaled mean absolute error", "Abundance")
-# g_visreg_by_experimental_design = ggarrange(g_visreg_richness_experimental_design, 
-#                                             g_visreg_composition_experimental_design,
-#                                             g_visreg_abundance_experimental_design,
-#                                             nrow=3,ncol=1,
-#                                             labels='auto',
-#                                             common.legend = TRUE,
-#                                             align='hv',
-#                                             legend='bottom')
-# ggsave(g_visreg_by_experimental_design, file='outputs/figures/g_visreg_by_experimental_design.png',width=7,height=8)
-# 
-# 
 
 
 
@@ -392,20 +242,6 @@ xvars_post_hoc = c("type",
                     "num_losses_mean",
                     "abundance_final_skewness_mean")
 
-# m_richness_scaled_mae_test_dataset = lmer(richness_scaled_mae_test ~ (type + num_species_dataset + num_losses_mean_train + abundance_final_skewness_mean_train) + (1|nice_name),
-#                                           data=df_all_for_regression_dataset)
-# 
-# m_composition_balanced_accuracy_mean_test_dataset = lmer(oneminuscomposition_balanced_accuracy_mean_test ~ (type + num_species_dataset + num_losses_mean_train + abundance_final_skewness_mean_train) + (1|nice_name),
-#                                                          data=df_all_for_regression_dataset)
-
-# m_post_hoc_abundance_mae_mean_test_scaled_clipped = lmer(abundance_mae_mean_test_scaled_clipped ~ 
-#                                                 type + 
-#                                                 num_species_dataset + 
-#                                                 num_losses_mean + 
-#                                                 abundance_final_skewness_mean +
-#                                                 (1|name_nice),
-#                                            data=df_all_for_regression_dataset)
-# 
 brk <- function(x) seq(ceiling(x[1]), floor(x[2]), by = 1)
 
 plot_visreg_perf_dataset <- function(data=df_all_for_regression_dataset, 
@@ -439,37 +275,36 @@ plot_visreg_perf_dataset <- function(data=df_all_for_regression_dataset,
   
   return(list(model=model,plots=plots_all))
 }
-
-perf_dataset_richness = plot_visreg_perf_dataset(yvar='richness_mae_test_scaled',
-                                                 ylab='Scaled mean absolute error',
-                                                 ylim=c(0,0.1),
-                                                 xvars=xvars_post_hoc,
-                                                 no_legend = FALSE)
-
-perf_dataset_composition = plot_visreg_perf_dataset(yvar='one_minus_composition_balanced_accuracy_mean_test',
-                                                    ylab='One minus balanced accuracy',
-                                                    ylim=c(0,0.6),
-                                                    xvars=xvars_post_hoc,
-                                                    no_legend = FALSE)
+# 
+# perf_dataset_richness = plot_visreg_perf_dataset(yvar='richness_mae_test_scaled',
+#                                                  ylab='Scaled mean absolute error',
+#                                                  ylim=c(0,0.1),
+#                                                  xvars=xvars_post_hoc,
+#                                                  no_legend = FALSE)
+# 
+# perf_dataset_composition = plot_visreg_perf_dataset(yvar='one_minus_composition_balanced_accuracy_mean_test',
+#                                                     ylab='One minus balanced accuracy',
+#                                                     ylim=c(0,0.6),
+#                                                     xvars=xvars_post_hoc,
+#                                                     no_legend = FALSE)
 
 perf_dataset_abundance = plot_visreg_perf_dataset(yvar='abundance_mae_mean_test_scaled_clipped',
                                                   ylab='Scaled mean absolute error',
                                                   xvars = xvars_post_hoc,
                                                   ylim=c(0,0.4),
                                                   no_legend = FALSE)
-
-g_perf_dataset = ggarrange(plotlist=c(perf_dataset_richness$plots, perf_dataset_composition$plots, perf_dataset_abundance$plots),
-                           nrow=3,ncol=4,
+#perf_dataset_richness$plots, perf_dataset_composition$plots, 
+g_perf_dataset = ggarrange(plotlist=c(perf_dataset_abundance$plots),
                            common.legend = TRUE,
                            align='hv',
-                           legend='bottom',
-                           labels=c('(a) Richness',rep("",3),'(b) Composition',rep("",3),'(c) Abundance',rep("",3)))
+                           legend='bottom')
+                    #labels=c('(a) Richness',rep("",3),'(b) Composition',rep("",3),'(c) Abundance',rep("",3)))
 
 ggsave(g_perf_dataset, file='outputs/figures/g_perf_dataset.pdf',
-       width=11,height=9)
+       width=7,height=7)
 
-r.squaredGLMM(perf_dataset_richness$model)
-r.squaredGLMM(perf_dataset_composition$model)
+# r.squaredGLMM(perf_dataset_richness$model)
+# r.squaredGLMM(perf_dataset_composition$model)
 r.squaredGLMM(perf_dataset_abundance$model)
 
 
@@ -493,7 +328,11 @@ cases_all = data.frame(name=names(names_nice), fn_assemblages=c('data/annual_pla
                                                                                            'data/friedman_gore/data_friedman_gore.csv'))
 cases = cases_all %>%
   filter(name %in% c('annual_plant','human_gut','mouse_gut','sortie-nd_plants')) # only do the complete datasets
+warning('below line is workaround until savio finishes')
+cases = cases[cases$name!='annual_plant',]
 
+# because the outputs are too big, first download them
+# find love/outputs/statistical | grep -e "method=rf\\_" | grep -e "num\\_train=89" | grep -e "experimental\\_design=mixed" | grep -e "response=abundance" | zip -@ test.zip
 
 datasets_preds = lapply(1:nrow(cases), function(i) {
   cat(i)
@@ -504,6 +343,54 @@ datasets_preds = lapply(1:nrow(cases), function(i) {
                                       response_var = 'abundance')
 })
 names(datasets_preds) = cases$name
+
+# check that we have 10 cases for each dataset
+sapply(datasets_preds, nrow)
+
+
+check_unwanted <- function(dataset_name_this)
+{
+  num_species_this = read.csv(cases$fn_assemblages[cases$name==dataset_name_this]) %>% select(contains("star")) %>% ncol
+  cat(dataset_name_this)
+  stats_unwanted_this = lapply(1:num_species_this, function(id_unwanted_this) {
+    cat('.')
+    predictions_best_remove_unwanted = predictions_best(datasets_preds=datasets_preds[[dataset_name_this]],
+                                                        type='remove_unwanted',
+                                                        options=list(id_unwanted=id_unwanted_this),
+                                                        quantile_cutoff=0.0,
+                                                        fn_assemblages=cases$fn_assemblages[cases$name==dataset_name_this])
+    
+    result_this = rbindlist(lapply(predictions_best_remove_unwanted, function(x) { x$stats }))
+    result_this$id_unwanted = id_unwanted_this
+    result_this$name = dataset_name_this
+    return(list(result_this=result_this,predictions_best_remove_unwanted=predictions_best_remove_unwanted))
+  })
+  
+  result_df = rbindlist(lapply(stats_unwanted_this, function(x) { x$result_this }))
+  result_best = lapply(stats_unwanted_this, function(x) { x$predictions_best_remove_unwanted })
+  return(list(result_df=result_df, result_best=result_best))
+}
+results_unwanted_all = lapply(cases$name, check_unwanted) # this runs slowly due to the annual plant dataset
+
+
+g_unwanted_all = ggplot(lapply(results_unwanted_all, function(x) {x[[1]]}) %>% 
+                          rbindlist %>% 
+                          select(name, id_unwanted, Sensitivity, Specificity) %>% 
+                          melt(id.vars=c("name","id_unwanted")) %>%
+                          mutate(value=ifelse(is.na(value),0,value)) %>%
+                          mutate(id_unwanted = letters[id_unwanted]), 
+                        aes(x=factor(id_unwanted),y=value,color=variable)) + 
+  facet_wrap(~name,scales='free_x',labeller=as_labeller(names_nice),nrow=1) +
+  geom_boxplot() +
+  theme_bw() +
+  ggtitle("Remove unwanted species") +
+  xlab("Unwanted species") + ylab("Value (train + test)") +
+  scale_color_manual(values=colorBlindBlack8,name='Statistic') +
+  theme(legend.position='bottom') +
+  theme(axis.text=element_text(size=6))
+
+
+
 
 
 predictions_best <- function(type, datasets_preds, quantile_cutoff, fn_assemblages, options=NULL)
@@ -531,12 +418,16 @@ predictions_best <- function(type, datasets_preds, quantile_cutoff, fn_assemblag
     outcome_abundances_PREDICTED_test = read.csv(datasets_preds$files_pred_test[i])
     outcome_abundances_PREDICTED = rbind(outcome_abundances_PREDICTED_train, outcome_abundances_PREDICTED_test) 
     
+    print(data.frame(nrow_train = nrow(outcome_abundances_PREDICTED_train), 
+                     nrow_test = nrow(outcome_abundances_PREDICTED_test),
+                     nrow_predicted = nrow(outcome_abundances_PREDICTED)))
+    
     if (type=='shannons_H')
     {
       shannons_H_PREDICTED = diversity(outcome_abundances_PREDICTED,index='shannon')
       shannons_H_ALL = diversity(outcome_abundances_ALL,index='shannon')
       
-      print(data.frame(length(shannons_H_PREDICTED), length(shannons_H_ALL)))
+      #print(data.frame(length(shannons_H_PREDICTED), length(shannons_H_ALL)))
       #plot(shannons_H_PREDICTED, shannons_H_ALL)
       
       experiments_best_PREDICTED = experiments[shannons_H_PREDICTED >= quantile(shannons_H_ALL, quantile_cutoff, na.rm=T), 1:num_species] %>%
@@ -607,49 +498,6 @@ predictions_best <- function(type, datasets_preds, quantile_cutoff, fn_assemblag
   cat('\n')
   return(result)
 }
-
-check_unwanted <- function(dataset_name_this)
-{
-  num_species_this = read.csv(cases$fn_assemblages[cases$name==dataset_name_this]) %>% select(contains("star")) %>% ncol
-  cat(dataset_name_this)
-  stats_unwanted_this = lapply(1:num_species_this, function(id_unwanted_this) {
-    cat('.')
-    predictions_best_remove_unwanted = predictions_best(datasets_preds=datasets_preds[[dataset_name_this]],
-                                                        type='remove_unwanted',
-                                                        options=list(id_unwanted=id_unwanted_this),
-                                                        quantile_cutoff=0.0,
-                                                        fn_assemblages=cases$fn_assemblages[cases$name==dataset_name_this])
-    
-    result_this = rbindlist(lapply(predictions_best_remove_unwanted, function(x) { x$stats }))
-    result_this$id_unwanted = id_unwanted_this
-    result_this$name = dataset_name_this
-    return(list(result_this=result_this,predictions_best_remove_unwanted=predictions_best_remove_unwanted))
-  })
-  
-  result_df = rbindlist(lapply(stats_unwanted_this, function(x) { x$result_this }))
-  result_best = lapply(stats_unwanted_this, function(x) { x$predictions_best_remove_unwanted })
-  return(list(result_df=result_df, result_best=result_best))
-}
-results_unwanted_all = lapply(cases$name, check_unwanted) # this runs slowly due to the annual plant dataset
-
-
-g_unwanted_all = ggplot(lapply(results_unwanted_all, function(x) {x[[1]]}) %>% 
-                          rbindlist %>% 
-                          select(name, id_unwanted, Sensitivity, Specificity) %>% 
-                          melt(id.vars=c("name","id_unwanted")) %>%
-                          mutate(value=ifelse(is.na(value),0,value)) %>%
-                          mutate(id_unwanted = letters[id_unwanted]), 
-                        aes(x=factor(id_unwanted),y=value,color=variable)) + 
-  facet_wrap(~name,scales='free_x',labeller=as_labeller(names_nice),nrow=1) +
-  geom_boxplot() +
-  theme_bw() +
-  ggtitle("Remove unwanted species") +
-  xlab("Unwanted species") + ylab("Value (train + test)") +
-  scale_color_manual(values=colorBlindBlack8,name='Statistic') +
-  theme(legend.position='bottom') +
-  theme(axis.text=element_text(size=6))
-
-
 
 
 predictions_best_shannons_H = lapply(1:length(datasets_preds),
