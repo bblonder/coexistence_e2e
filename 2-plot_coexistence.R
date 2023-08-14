@@ -13,9 +13,11 @@ library(vegan)
 library(RColorBrewer)
 library(MuMIn)
 library(conflicted)
+library(ggbiplot)
+library(ggrepel)
 conflict_prefer("select", "dplyr")
 conflict_prefer("filter", "dplyr")
-
+conflict_prefer("mutate", "plyr")
 
 
 colorBlindBlack8  <- c("#000000", "#E69F00", "#56B4E9", "#009E73", 
@@ -82,7 +84,6 @@ fns = c(`cedar_creek_plants`='data/cedar_creek/cedar_creek_2018.csv',
         `sortie-nd_plants`='data/sortie/data_sortie.csv',
         `human_gut`='data/glv/assemblages_H_12.csv',
         `mouse_gut`='data/glv/assemblages_M_11.csv',
-        `glv_simulated`='data/glv/assemblages_glv_16.csv',
         `annual_plant`='data/annual_plant/assemblages_annual_plant_18.csv',
         `fly_gut`='data/fly/data_fly.csv',
         `soil_bacteria`='data/friedman_gore/data_friedman_gore.csv')
@@ -321,18 +322,21 @@ possible_num_train = ceiling(log_seq(1e1,1e4,length.out=20))
 cases_all = data.frame(name=names(names_nice), fn_assemblages=c('data/annual_plant/assemblages_annual_plant_18.csv',
                                                                                            'data/cedar_creek/cedar_creek_2018.csv',
                                                                                            'data/fly/data_fly.csv',
-                                                                                           #'data/glv/assemblages_glv_16.csv',
                                                                                            'data/glv/assemblages_H_12.csv',
                                                                                            'data/glv/assemblages_M_11.csv',
                                                                                            'data/sortie/data_sortie.csv',
                                                                                            'data/friedman_gore/data_friedman_gore.csv'))
 cases = cases_all %>%
   filter(name %in% c('annual_plant','human_gut','mouse_gut','sortie-nd_plants')) # only do the complete datasets
-warning('below line is workaround until savio finishes')
-cases = cases[cases$name!='annual_plant',]
+
 
 # because the outputs are too big, first download them
-# find love/outputs/statistical | grep -e "method=rf\\_" | grep -e "num\\_train=89" | grep -e "experimental\\_design=mixed" | grep -e "response=abundance" | zip -@ test.zip
+# cd /global/scratch/users/benjaminblonder
+# find love/outputs/statistical | grep -e "method=rf\\_" | grep -e "num\\_train=89" | grep -e "experimental\\_design=mixed" | grep -e "response=abundance" | zip -@ test89.zip
+# copy test.zip to local directory, move contents to outputs/statistical
+# also find love/outputs/statistical | grep -e "method=rf\\_" | grep -e "num\\_train=546" | grep -e "experimental\\_design=mixed" | grep -e "response=abundance" | zip -@ test546.zip
+
+
 
 datasets_preds = lapply(1:nrow(cases), function(i) {
   cat(i)
@@ -348,49 +352,6 @@ names(datasets_preds) = cases$name
 sapply(datasets_preds, nrow)
 
 
-check_unwanted <- function(dataset_name_this)
-{
-  num_species_this = read.csv(cases$fn_assemblages[cases$name==dataset_name_this]) %>% select(contains("star")) %>% ncol
-  cat(dataset_name_this)
-  stats_unwanted_this = lapply(1:num_species_this, function(id_unwanted_this) {
-    cat('.')
-    predictions_best_remove_unwanted = predictions_best(datasets_preds=datasets_preds[[dataset_name_this]],
-                                                        type='remove_unwanted',
-                                                        options=list(id_unwanted=id_unwanted_this),
-                                                        quantile_cutoff=0.0,
-                                                        fn_assemblages=cases$fn_assemblages[cases$name==dataset_name_this])
-    
-    result_this = rbindlist(lapply(predictions_best_remove_unwanted, function(x) { x$stats }))
-    result_this$id_unwanted = id_unwanted_this
-    result_this$name = dataset_name_this
-    return(list(result_this=result_this,predictions_best_remove_unwanted=predictions_best_remove_unwanted))
-  })
-  
-  result_df = rbindlist(lapply(stats_unwanted_this, function(x) { x$result_this }))
-  result_best = lapply(stats_unwanted_this, function(x) { x$predictions_best_remove_unwanted })
-  return(list(result_df=result_df, result_best=result_best))
-}
-results_unwanted_all = lapply(cases$name, check_unwanted) # this runs slowly due to the annual plant dataset
-
-
-g_unwanted_all = ggplot(lapply(results_unwanted_all, function(x) {x[[1]]}) %>% 
-                          rbindlist %>% 
-                          select(name, id_unwanted, Sensitivity, Specificity) %>% 
-                          melt(id.vars=c("name","id_unwanted")) %>%
-                          mutate(value=ifelse(is.na(value),0,value)) %>%
-                          mutate(id_unwanted = letters[id_unwanted]), 
-                        aes(x=factor(id_unwanted),y=value,color=variable)) + 
-  facet_wrap(~name,scales='free_x',labeller=as_labeller(names_nice),nrow=1) +
-  geom_boxplot() +
-  theme_bw() +
-  ggtitle("Remove unwanted species") +
-  xlab("Unwanted species") + ylab("Value (train + test)") +
-  scale_color_manual(values=colorBlindBlack8,name='Statistic') +
-  theme(legend.position='bottom') +
-  theme(axis.text=element_text(size=6))
-
-
-
 
 
 predictions_best <- function(type, datasets_preds, quantile_cutoff, fn_assemblages, options=NULL)
@@ -401,7 +362,7 @@ predictions_best <- function(type, datasets_preds, quantile_cutoff, fn_assemblag
   
   outcome_abundances_ALL = assemblages %>%
     select(contains("star"))
-  #outcome_abundances_ALL = quantile_max_trim(outcome_abundances_ALL)
+  outcome_abundances_ALL = quantile_max_trim(outcome_abundances_ALL)
   num_species = ncol(outcome_abundances_ALL)
   
   result = lapply (1:nrow(datasets_preds), function(i)
@@ -418,13 +379,15 @@ predictions_best <- function(type, datasets_preds, quantile_cutoff, fn_assemblag
     outcome_abundances_PREDICTED_test = read.csv(datasets_preds$files_pred_test[i])
     outcome_abundances_PREDICTED = rbind(outcome_abundances_PREDICTED_train, outcome_abundances_PREDICTED_test) 
     
-    print(data.frame(nrow_train = nrow(outcome_abundances_PREDICTED_train), 
+    print(data.frame(nrow_all = nrow(outcome_abundances_ALL),
+                     nrow_train = nrow(outcome_abundances_PREDICTED_train), 
                      nrow_test = nrow(outcome_abundances_PREDICTED_test),
                      nrow_predicted = nrow(outcome_abundances_PREDICTED)))
     
     if (type=='shannons_H')
     {
       shannons_H_PREDICTED = diversity(outcome_abundances_PREDICTED,index='shannon')
+      #print(summary(outcome_abundances_ALL))
       shannons_H_ALL = diversity(outcome_abundances_ALL,index='shannon')
       
       #print(data.frame(length(shannons_H_PREDICTED), length(shannons_H_ALL)))
@@ -434,6 +397,9 @@ predictions_best <- function(type, datasets_preds, quantile_cutoff, fn_assemblag
         na.omit
       experiments_best_ACTUAL = assemblages[shannons_H_ALL >= quantile(shannons_H_ALL, quantile_cutoff, na.rm=T), 1:num_species] %>%
         na.omit
+      
+      print(data.frame(num.best.predicted = nrow(experiments_best_PREDICTED), 
+                       num.best.actual = nrow(experiments_best_ACTUAL)))
     }
     else if (type=='total_abundance')
     {
@@ -487,17 +453,76 @@ predictions_best <- function(type, datasets_preds, quantile_cutoff, fn_assemblag
     
     confusion_matrix_stats = confusion_matrix$byClass %>% t %>% as.data.frame
     
+    # also get abundances
+    abundances_best_PREDICTED = outcome_abundances_PREDICTED[flag_best_PREDICTED,]
+    abundances_best_ACTUAL = outcome_abundances_ALL[flag_best_ACTUAL,]
+    
     return(list(name=datasets_preds$name[1],
                 type=type,
                 num_species=num_species,
                 stats=confusion_matrix_stats,
                 experiments_ALL=ids_experiments_ALL,
+                experiments_best_ACTUAL_matrix = experiments_best_ACTUAL,
+                experiments_best_PREDICTED_matrix = experiments_best_PREDICTED,
                 experiments_best_ACTUAL=ids_experiments_best_ACTUAL,
-                experiments_best_PREDICTED=ids_experiments_best_PREDICTED))
+                experiments_best_PREDICTED=ids_experiments_best_PREDICTED,
+                abundances_best_PREDICTED=abundances_best_PREDICTED,
+                abundances_best_ACTUAL=abundances_best_ACTUAL,
+                abundances_ALL = outcome_abundances_ALL,
+                abundances_best_ACTUAL_FOR_PREDICTIONS = outcome_abundances_ALL[flag_best_PREDICTED,],
+                abundances_best_ACTUAL_FOR_ACTUAL = outcome_abundances_ALL[flag_best_ACTUAL,],
+                indices_best_ACTUAL = flag_best_ACTUAL,
+                indices_best_PREDICTED = flag_best_PREDICTED
+                  ))
   })
   cat('\n')
   return(result)
 }
+
+
+check_unwanted <- function(dataset_name_this)
+{
+  num_species_this = read.csv(cases$fn_assemblages[cases$name==dataset_name_this]) %>% select(contains("star")) %>% ncol
+  cat(dataset_name_this)
+  stats_unwanted_this = lapply(1:num_species_this, function(id_unwanted_this) {
+    cat('.')
+    predictions_best_remove_unwanted = predictions_best(datasets_preds=datasets_preds[[dataset_name_this]],
+                                                        type='remove_unwanted',
+                                                        options=list(id_unwanted=id_unwanted_this),
+                                                        quantile_cutoff=0.0,
+                                                        fn_assemblages=cases$fn_assemblages[cases$name==dataset_name_this])
+    
+    result_this = rbindlist(lapply(predictions_best_remove_unwanted, function(x) { x$stats }))
+    result_this$id_unwanted = id_unwanted_this
+    result_this$name = dataset_name_this
+    return(list(result_this=result_this,predictions_best_remove_unwanted=predictions_best_remove_unwanted))
+  })
+  
+  result_df = rbindlist(lapply(stats_unwanted_this, function(x) { x$result_this }))
+  result_best = lapply(stats_unwanted_this, function(x) { x$predictions_best_remove_unwanted })
+  return(list(result_df=result_df, result_best=result_best))
+}
+results_unwanted_all = lapply(cases$name, check_unwanted) # this runs slowly due to the annual plant dataset
+
+
+g_unwanted_all = ggplot(lapply(results_unwanted_all, function(x) {x[[1]]}) %>% 
+                          rbindlist %>% 
+                          select(name, id_unwanted, Sensitivity, Specificity) %>% 
+                          melt(id.vars=c("name","id_unwanted")) %>%
+                          mutate(value=ifelse(is.na(value),0,value)) %>%
+                          mutate(id_unwanted = letters[id_unwanted]), 
+                        aes(x=factor(id_unwanted),y=value,color=variable)) + 
+  facet_wrap(~name,scales='free_x',labeller=as_labeller(names_nice),nrow=1) +
+  geom_boxplot() +
+  theme_bw() +
+  ggtitle("Remove unwanted species") +
+  xlab("Unwanted species") + ylab("Value (train + test)") +
+  scale_color_manual(values=colorBlindBlack8,name='Statistic') +
+  theme(legend.position='bottom') +
+  theme(axis.text=element_text(size=6))
+
+
+
 
 
 predictions_best_shannons_H = lapply(1:length(datasets_preds),
@@ -873,7 +898,7 @@ make_obs_pred_abundance_figure <- function(num_train)
                                                                                 color=variable,
                                                                                 shape=rep.factor)) + 
     geom_line(stat="smooth",method = "lm", se=FALSE,alpha=0.5,size=0.75) +
-    geom_point() +
+    geom_point(alpha=0.5) +
     theme_bw() +
     geom_abline(slope=1,linewidth=2,alpha=0.5) +
     scale_shape_manual(values=1:nlevels(predictions_abundance_all_for_scatter_small$rep.factor)) + 
@@ -888,7 +913,134 @@ make_obs_pred_abundance_figure <- function(num_train)
   ggsave(g_abundance_scatter, file=sprintf('outputs/figures/g_abundance_scatter_%d.pdf', num_train),width=12,height=8)
 }
 
-make_obs_pred_abundance_figure(num_train=possible_num_train[7])
-make_obs_pred_abundance_figure(num_train=possible_num_train[10])
-make_obs_pred_abundance_figure(num_train=possible_num_train[13])
+make_obs_pred_abundance_figure(num_train=89)
+make_obs_pred_abundance_figure(num_train=546)
 
+
+
+
+
+
+
+
+
+# make bar graphs or pies
+z_pred = predictions_best_shannons_H[[2]][[4]]$abundances_best_ACTUAL_FOR_PREDICTIONS %>%
+  mutate(row_id = 1:n()) %>%
+  pivot_longer(cols=!row_id, names_to='species',values_to='abundance')
+z_actual = predictions_best_shannons_H[[2]][[4]]$abundances_best_ACTUAL_FOR_ACTUAL %>%
+  mutate(row_id = 1:n()) %>%
+  pivot_longer(cols=!row_id, names_to='species',values_to='abundance')
+
+# show actual abundance outcomes for the real best and the selected best experiments
+ggplot(z_actual, aes(x=row_id,y=abundance,fill=species)) +
+  geom_bar(stat='identity') +
+  theme_bw() + 
+  coord_flip()
+
+ggplot(z_pred, aes(x=row_id,y=abundance,fill=species)) +
+  geom_bar(stat='identity') +
+  theme_bw() + 
+  coord_flip()
+
+# show the experimental conditions of the predicted best experiments
+predictions_best_shannons_H[[4]][[10]]$experiments_best_PREDICTED_matrix %>%
+  as.matrix %>%
+  heatmap(scale='none',Colv=NA,keep.dendro=FALSE)
+
+
+# do a NMDS of the actual outcomes
+best_predictions_pca <- function(predictions_this, title="")
+{
+  df_this = predictions_this$abundances_ALL
+  indices_best_actual = predictions_this$indices_best_ACTUAL
+  indices_best_predicted = predictions_this$indices_best_PREDICTED
+  rows_na = which(is.na(rowSums(df_this)))
+  if(length(rows_na)>0)
+  {
+    df_this = df_this[-rows_na,]
+    indices_best_actual = indices_best_actual[-rows_na]
+    indices_best_predicted = indices_best_predicted[-rows_na]
+  }
+
+  indices_category = factor(paste(indices_best_actual, indices_best_predicted), levels=c("FALSE FALSE","FALSE TRUE", "TRUE FALSE", "TRUE TRUE"), labels=c('true negative','false positive','false negative','true positive'))
+  
+  print(table(indices_category))
+  
+  pc_this = prcomp(sqrt(df_this),scale=TRUE,center=TRUE) # sqrt + centering/scaling
+  
+  #pc_this$x = pc_this$x[order(indices_category),]
+  #indices_category = indices_category[order(indices_category)]
+  
+  pc_this$rotation = data.frame(pc_this$rotation)
+  pc_this$rotation$var = gsub(".star","",row.names(pc_this$rotation), fixed=TRUE)
+  
+  bin_width_this = max(abs(as.numeric(pc_this$x[,1:2])))
+  axis_length_this = max(abs(as.numeric(as.matrix(pc_this$rotation[,1:2]))))
+  
+  g_biplot = ggplot(data.frame(pc_this$x,indices_category), aes(x=PC1,
+                                                                y=PC2)
+                                                                ) +
+    geom_hex(binwidth=bin_width_this / 5) +
+    # geom_point() +
+    # geom_jitter(width=0.01,height=0.01) +
+    theme_bw() +
+    facet_wrap(~indices_category,nrow=1,ncol=4,drop=FALSE) +
+    scale_fill_viridis_c(option='plasma',begin=0.1,end=0.9,name='# of cases') +
+    geom_segment(data=data.frame(pc_this$rotation),
+                 aes(x=0,y=0,xend=PC1*bin_width_this/axis_length_this,yend=PC2*bin_width_this/axis_length_this),
+                 arrow=arrow(length = unit(0.05, "inches")),color='darkgray') +
+    # geom_text(data=pc_this$rotation,
+    #           aes(x=1.1*PC1*bin_width_this/axis_length_this,y=1.1*PC2*bin_width_this/axis_length_this,label=var)) +
+    coord_fixed(ratio=1) +
+    ggtitle(title)
+  
+  # g_biplot = ggbiplot(pc_this, 
+  #                     groups=indices_category,
+  #                     alpha=0.75) +
+  #   theme_bw() +
+  #   scale_color_manual(values=c('lightblue','orange','red','blue'),drop=FALSE)
+  return(g_biplot)
+}
+
+best_predictions_pca_all <- function(predictions, title="")
+{
+  names_nice_this = names_nice[cases$name]
+  g_list = lapply(1:length(names_nice_this), function(i)
+  {
+    # pick one of the ensembles based on having the most predictions
+    counts_predictions = sapply(predictions[[i]], function(p_this) {
+      index = length(which(p_this$indices_best_PREDICTED==TRUE))
+      return(index)
+      })
+    print(counts_predictions)
+    index_ensemble = which.max(counts_predictions)
+    
+    g = best_predictions_pca(predictions[[i]][[index_ensemble]], title=sprintf("(%s) %s",letters[i],names_nice[cases$name[i]]))
+  })
+  g_final = ggarrange(plotlist = g_list,
+                      #align='hv',
+                      hjust=0,
+                      ncol=1) + ggtitle(title)
+  return(g_final)
+}
+
+g_best_hexbin_shannons_H = best_predictions_pca_all(predictions_best_shannons_H,"Maximize Shannon's H")
+ggsave(g_best_hexbin_shannons_H, file='outputs/figures/g_best_hexbin_shannons_H.pdf',width=8,height=10)
+
+g_best_hexbin_abundance = best_predictions_pca_all(predictions_best_total_abundance,"Maximize abundance")
+ggsave(g_best_hexbin_abundance, file='outputs/figures/g_best_hexbin_abundance.pdf',width=8,height=10)
+
+
+reorder_best_species <- function(results_unwanted, species_this=1)
+{
+  #results_unwanted_all[[1]]$result_best[[1]][[1]]  %>% names# dataset, species, replicate
+  lapply(results_unwanted, function(r) {
+    return(r$result_best[[species_this]])
+    })
+}
+
+
+g_best_hexbin_removal = best_predictions_pca_all(
+  reorder_best_species(results_unwanted_all, species_this=2),"Remove species 'b'")
+ggsave(g_best_hexbin_removal, file='outputs/figures/g_best_hexbin_removal.pdf',width=8,height=10)

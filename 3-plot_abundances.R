@@ -63,9 +63,6 @@ g_human_gut = plot_data(data_assemblages_H_12,'Human gut')
 data_assemblages_M_11 = read.csv('data/glv/assemblages_M_11.csv')
 g_mouse_gut = plot_data(data_assemblages_M_11,'Mouse gut')
 
-# data_assemblages_glv_16 = read.csv('data/glv/assemblages_glv_16.csv')
-# g_glv_simulated = plot_data(data_assemblages_glv_16,'GLV simulated')
-
 data_annual_plant_18 = read.csv('data/annual_plant/assemblages_annual_plant_18.csv')
 g_annual_plant = plot_data(data_annual_plant_18,'Annual plant')
 
