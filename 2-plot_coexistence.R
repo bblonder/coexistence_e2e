@@ -15,9 +15,16 @@ library(MuMIn)
 library(conflicted)
 library(ggbiplot)
 library(ggrepel)
+library(car)
+library(sjPlot)
+library(ggheatmap)
+
 conflict_prefer("select", "dplyr")
 conflict_prefer("filter", "dplyr")
 conflict_prefer("mutate", "plyr")
+conflict_prefer("arrange", "dplyr")
+conflict_prefer("rename", "dplyr")
+conflict_prefer("summarize", "dplyr")
 
 
 colorBlindBlack8  <- c("#000000", "#E69F00", "#56B4E9", "#009E73", 
@@ -64,19 +71,19 @@ varnames_nice = c(experimental_design='Experimental design',
                   )
 
 experimental_design_nice = c(mixed='Mixed',
-                             `low-2`='Doublets only',
-                             `low-3`='Doublets + triplets only',
-                             `high-1`='1-dropouts only',
-                             `high-2`='1-dropouts + 2-dropouts only',
-                             prior='Singlets + 1-dropouts, then mixed')
+                             `low-2`='Doublets',
+                             `low-3`='Doublets, triplets',
+                             `high-1`='1-dropouts',
+                             `high-2`='1-dropouts, 2-dropouts',
+                             prior='Singlets, 1-dropouts; then mixed')
 
 methods_nice = c(
-                             rf='Random forest on experiments',
+                             rf='Random forest',
                              glv='GLV predictions',
                              glv_rf='Random forest on GLV residuals',
-                             glv_rf_full='Random forest on experiments + GLV predictions',
+                             glv_rf_full='Random forest + GLV predictions',
                              sequential_rf='Random forest, sequential',
-                             naive=' Naïve (mean abundance) ')
+                             naive=' Naïve (mean abundance)')
 
 # add NA removal counts
 source('utils/quantile_trim.R')
@@ -170,9 +177,37 @@ df_all_stats = df_all %>%
          num_na, 
          empirical) %>%
   mutate(possible_num_combos = 2^num_species_dataset) %>%
+  mutate(abundance_q95_dataset = format(abundance_q95_dataset, nsmall=1, digits=1, scientific=FALSE)) %>%
   unique %>%
-  arrange(name_nice)
+  arrange(tolower(name_nice))
 write.csv(df_all_stats,'outputs/figures/table_dataset_stats.csv',row.names=F)
+
+
+
+
+
+
+#### infrastructure to select cases
+# because the outputs are too big, first download them
+# cd /global/scratch/users/benjaminblonder
+# find love/outputs/statistical | grep -e "method=rf\\_" | grep -e "num\\_train=89" | grep -e "experimental\\_design=mixed" | grep -e "response=abundance" | zip -@ test89.zip
+# copy test.zip to local directory, move contents to outputs/statistical
+# also find love/outputs/statistical | grep -e "method=rf\\_" | grep -e "num\\_train=546" | grep -e "experimental\\_design=mixed" | grep -e "response=abundance" | zip -@ test546.zip
+
+
+source('utils/pick_datasets.R')
+source('utils/log_seq.R')
+possible_num_train = ceiling(log_seq(1e1,1e4,length.out=20))
+
+cases_all = data.frame(name=names(names_nice), fn_assemblages=c('data/annual_plant/assemblages_annual_plant_18.csv',
+                                                                'data/cedar_creek/cedar_creek_2018.csv',
+                                                                'data/fly/data_fly.csv',
+                                                                'data/glv/assemblages_H_12.csv',
+                                                                'data/glv/assemblages_M_11.csv',
+                                                                'data/sortie/data_sortie.csv',
+                                                                'data/friedman_gore/data_friedman_gore.csv'))
+cases = cases_all %>%
+  filter(name %in% c('annual_plant','human_gut','mouse_gut','sortie-nd_plants')) # only do the complete datasets
 
 
 
@@ -189,43 +224,65 @@ g_abundance_mae_mean_test_scaled_clipped_by_num_train = ggplot(df_all %>%
        aes(x=num_train,
            y=abundance_mae_mean_test_scaled_clipped,
            color=name_nice,fill=name_nice)) +
-  geom_point(alpha=0.25) +
+  geom_point(alpha=0.5) +
   theme_bw() +
   facet_wrap(~method_nice) +
-  ylim(0,2) +
-  #scale_x_discrete(drop=FALSE) +
   scale_color_brewer(palette='Set2',name='Dataset') +
   scale_fill_brewer(palette='Set2',name='Dataset') +
   geom_smooth(method='lm') +
   scale_x_log10() +
-  scale_y_log10(breaks=c(0.01,0.05,0.1,0.2,1,2,10)) +
+  scale_y_log10(breaks=c(0.01,0.05,0.2,1,10),limits=c(0.01,10)) +
   xlab("Number of training cases") +
-  ylab("Mean absolute abundance error\nscaled by 95% quantile abundance in dataset")
-ggsave(g_abundance_mae_mean_test_scaled_clipped_by_num_train, file='outputs/figures/g_abundance_mae_mean_test_scaled_clipped_by_num_train.pdf',
-       width=12,height=8)
+  ylab("Scaled error") +
+  theme(legend.position='right')
 
-
-
-
-# good plot
 g_abundance_mae_mean_test_scaled_clipped_by_experimental_design = ggplot(df_all %>%
-         filter(num_train==30 & method=='rf'), 
+         filter(num_train==89 & method=='rf'), 
        aes(x=name_nice,
            y=abundance_mae_mean_test_scaled_clipped,
-           color=experimental_design_nice)) +
-  geom_boxplot() +
+           color=experimental_design_nice,
+           fill=experimental_design_nice,
+           group=paste(experimental_design_nice,name_nice))) +
+  geom_boxplot(alpha=0.25,outlier.shape = NA) +
+  geom_point(position=position_jitterdodge(jitter.width = 0.5),alpha=0.5) +
   theme_bw() +
-  ylim(0,1) +
-  facet_wrap(~name_nice,nrow=2,scales='free') +
-  scale_x_discrete(drop=TRUE) +
   scale_color_brewer(palette='Set1',name='Experimental design') +
-  scale_y_log10(breaks=c(0.01,0.05,0.1,0.2,1,2,10)) +
+  scale_fill_brewer(palette='Set1',name='Experimental design') +
+  scale_y_log10(breaks=c(0.01,0.05,0.2,1,10),limits=c(0.01,10)) +
   xlab("Dataset") +
-  ylab("Mean absolute abundance error\nscaled by 95% quantile abundance in dataset") +
-  theme(axis.ticks.x=element_blank(),axis.text.x=element_blank())
-  #theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=0.9))
-ggsave(g_abundance_mae_mean_test_scaled_clipped_by_experimental_design, file='outputs/figures/g_abundance_mae_mean_test_scaled_clipped_by_experimental_design.pdf',
-       width=9,height=5)
+  ylab("Scaled error") +
+  theme(legend.position='right')
+
+g_abundance_mae_mean_test_scaled_clipped_by_method = ggplot(df_all %>%
+                                                                           filter(num_train==89 & experimental_design=='mixed'), 
+                                                                         aes(x=name_nice,
+                                                                             y=abundance_mae_mean_test_scaled_clipped,
+                                                                             color=method_nice,
+                                                                             fill=method_nice,
+                                                                             group=paste(method_nice,name_nice))) +
+  geom_boxplot(alpha=0.25,outlier.shape = NA) +
+  geom_point(position=position_jitterdodge(jitter.width = 0.5),alpha=0.5) +
+  theme_bw() +
+  scale_color_brewer(palette='Set2',name='Method') +
+  scale_fill_brewer(palette='Set2',name='Method') +
+  scale_y_log10(breaks=c(0.01,0.05,0.2,1,10),limits=c(0.01,10)) +
+  xlab("Dataset") +
+  ylab("Scaled error") +
+  theme(legend.position='right')
+
+g_abundance_mae = ggarrange(plotlist=list(
+  g_abundance_mae_mean_test_scaled_clipped_by_method, 
+  g_abundance_mae_mean_test_scaled_clipped_by_num_train,
+  g_abundance_mae_mean_test_scaled_clipped_by_experimental_design),
+  nrow=3,labels='auto', align='hv')
+
+ggsave(g_abundance_mae,
+  width=8,height=9,file='outputs/figures/g_abundance_mae.pdf')
+ggsave(g_abundance_mae,
+       width=8,height=9,file='outputs/figures/g_abundance_mae.png')
+
+
+
 
 
 
@@ -234,79 +291,118 @@ ggsave(g_abundance_mae_mean_test_scaled_clipped_by_experimental_design, file='ou
 
 ### explanations
 df_all_for_regression_dataset = df_all %>%
-  filter(num_train==89 & method=='rf') %>%
-  arrange(num_train, experimental_design) %>%
+  filter(method=='rf' & num_train %in% c(21,89,546)) %>%
   mutate(type = factor(empirical,levels=c(FALSE,TRUE),labels = c('Simulated','Empirical')))
 
-xvars_post_hoc = c("type",
-                    "num_species_dataset", 
-                    "num_losses_mean",
-                    "abundance_final_skewness_mean")
 
-brk <- function(x) seq(ceiling(x[1]), floor(x[2]), by = 1)
 
-plot_visreg_perf_dataset <- function(data=df_all_for_regression_dataset, 
-                                     yvar, 
-                                     xvars,
-                                     ylab,
-                                     ylim,
-                                     no_legend=FALSE)
+
+# 
+# 
+# g_dataset_properties_num_species = ggplot(df_all_for_regression_dataset, 
+#        aes(color=factor(num_train), 
+#            fill=factor(num_train),
+#            y=abundance_mae_mean_test_scaled_clipped,
+#            x=num_species_dataset)) +
+#   #geom_boxplot(alpha=0.25,outlier.shape = NA) +
+#   geom_smooth(method='lm') +
+#   geom_point(position=position_jitterdodge(jitter.width = 0.5),alpha=0.5) +
+#   theme_bw() +
+#   scale_color_brewer(palette='Set2',name='Number of training cases') +
+#   scale_fill_brewer(palette='Set2',name='Number of training cases') +
+#   scale_y_log10(breaks=c(0.01,0.05,0.2,1,10),limits=c(0.01,10)) +
+#   xlab(varnames_nice["num_species_dataset"]) +
+#   ylab("Scaled error") +
+#   theme(legend.position='right')
+# 
+# g_dataset_properties_dataset_type = ggplot(df_all_for_regression_dataset, 
+#        aes(color=factor(num_train), 
+#            fill=factor(num_train),
+#            y=abundance_mae_mean_test_scaled_clipped,
+#            x=type)) +
+#   #geom_boxplot(alpha=0.25,outlier.shape = NA) +
+#   geom_smooth(method='lm') +
+#   geom_point(position=position_jitterdodge(jitter.width = 0.5),alpha=0.5) +
+#   theme_bw() +
+#   scale_color_brewer(palette='Set2',name='Number of training cases') +
+#   scale_fill_brewer(palette='Set2',name='Number of training cases') +
+#   scale_y_log10(breaks=c(0.01,0.05,0.2,1,10),limits=c(0.01,10)) +
+#   xlab(varnames_nice["type"]) +
+#   ylab("Scaled error") +
+#   theme(legend.position='right')
+# 
+# g_dataset_properties_num_losses  = ggplot(df_all_for_regression_dataset, 
+#        aes(color=factor(num_train), 
+#            fill=factor(num_train),
+#            y=abundance_mae_mean_test_scaled_clipped,
+#            x=num_losses_mean)) +
+#   #geom_boxplot(alpha=0.25,outlier.shape = NA) +
+#   geom_smooth(method='lm') +
+#   geom_point(position=position_jitterdodge(jitter.width = 0.5),alpha=0.5) +
+#   theme_bw() +
+#   scale_color_brewer(palette='Set2',name='Number of training cases') +
+#   scale_fill_brewer(palette='Set2',name='Number of training cases') +
+#   scale_y_log10(breaks=c(0.01,0.05,0.2,1,10),limits=c(0.01,10)) +
+#   xlab(varnames_nice["num_losses_mean"]) +
+#   ylab("Scaled error") +
+#   theme(legend.position='right')
+# 
+# g_dataset_properties_abundance_final_skewness = ggplot(df_all_for_regression_dataset, 
+#        aes(color=factor(num_train), 
+#            fill=factor(num_train),
+#            y=abundance_mae_mean_test_scaled_clipped,
+#            x=abundance_final_skewness_mean)) +
+#   #geom_boxplot(alpha=0.25,outlier.shape = NA) +
+#   geom_smooth(method='lm') +
+#   geom_point(position=position_jitterdodge(jitter.width = 0.5),alpha=0.5) +
+#   theme_bw() +
+#   scale_color_brewer(palette='Set2',name='Number of training cases') +
+#   scale_fill_brewer(palette='Set2',name='Number of training cases') +
+#   scale_y_log10(breaks=c(0.01,0.05,0.2,1,10),limits=c(0.01,10)) +
+#   xlab(varnames_nice["abundance_final_skewness_mean"]) +
+#   ylab("Scaled error") +
+#   theme(legend.position='right')
+# 
+# 
+# ggsave(ggarrange(plotlist=list(g_dataset_properties_num_species,
+#                         g_dataset_properties_dataset_type,
+#                         g_dataset_properties_num_losses,
+#                         g_dataset_properties_abundance_final_skewness),
+#           common.legend = TRUE,align='hv',labels = 'auto',legend='bottom'),
+#        file='outputs/figures/g_dataset_properties.pdf',width=7,height=7)
+# 
+
+
+
+m_dataset_properties = lmer(abundance_mae_mean_test_scaled_clipped ~ (1|name) + 
+                              log10(num_train)*num_species_dataset*type*num_losses_mean*abundance_final_skewness_mean,
+     data=df_all_for_regression_dataset)
+
+
+
+plot_model_properties <- function(xvar)
 {
-  model = lmer(formula(sprintf('%s ~ %s + (1|name_nice)', yvar, paste(xvars,collapse=" + "))),
-               data=data)
-  
-  plots_all = vector(mode="list",length=length(xvars))
-  for (i in 1:length(xvars))
-  {
-    plots_all[[i]] <- visreg(model, xvar=xvars[i], 
-                             gg=TRUE, overlay=TRUE, band=FALSE, 
-                             by='name_nice',
-                             line=list(col="black")) +
-      xlab(varnames_nice[ xvars[i] ]) +
-      theme_bw() +
-      ylab(ylab) +
-      ylim(ylim[1],ylim[2]) +
-      labs(color='Dataset') + 
-      scale_color_manual(values=colorBlindBlack8) + theme(plot.margin = margin(t=0.7,0.1,0.1,0.1, "cm")) +
-      scale_x_continuous(breaks = function(x) seq(ceiling(x[1]), floor(x[2]), by = 1))
-  }
-  #plots_arranged = ggarrange(plotlist=plots_all, nrow=1,ncol=4,common.legend = TRUE, legend=ifelse(no_legend==TRUE,'none','bottom'),align='hv') +
-  #  theme(plot.margin = margin(0.5,0.1,0.1,0.1, "cm"))
-  #plots_arranged = annotate_figure(plots_arranged, fig.lab=ylab)
-  
-  return(list(model=model,plots=plots_all))
+  visreg(m_dataset_properties,xvar=xvar,by='num_train',
+         gg=TRUE,overlay=TRUE,jitter=TRUE,band=FALSE,
+         type='conditional') +
+    theme_bw() +
+    scale_color_brewer(palette='Set2',name='Number of training cases') +
+    scale_fill_brewer(palette='Set2',name='Number of training cases') +
+    ylim(0,0.22) +
+    ylab('Scaled error') +
+    xlab(varnames_nice[xvar])
 }
-# 
-# perf_dataset_richness = plot_visreg_perf_dataset(yvar='richness_mae_test_scaled',
-#                                                  ylab='Scaled mean absolute error',
-#                                                  ylim=c(0,0.1),
-#                                                  xvars=xvars_post_hoc,
-#                                                  no_legend = FALSE)
-# 
-# perf_dataset_composition = plot_visreg_perf_dataset(yvar='one_minus_composition_balanced_accuracy_mean_test',
-#                                                     ylab='One minus balanced accuracy',
-#                                                     ylim=c(0,0.6),
-#                                                     xvars=xvars_post_hoc,
-#                                                     no_legend = FALSE)
 
-perf_dataset_abundance = plot_visreg_perf_dataset(yvar='abundance_mae_mean_test_scaled_clipped',
-                                                  ylab='Scaled mean absolute error',
-                                                  xvars = xvars_post_hoc,
-                                                  ylim=c(0,0.4),
-                                                  no_legend = FALSE)
-#perf_dataset_richness$plots, perf_dataset_composition$plots, 
-g_perf_dataset = ggarrange(plotlist=c(perf_dataset_abundance$plots),
-                           common.legend = TRUE,
-                           align='hv',
-                           legend='bottom')
-                    #labels=c('(a) Richness',rep("",3),'(b) Composition',rep("",3),'(c) Abundance',rep("",3)))
+g_dataset_properties_visreg = ggarrange(plotlist=list(plot_model_properties('num_species_dataset'),
+                        plot_model_properties('num_losses_mean'),
+                        plot_model_properties('abundance_final_skewness_mean'),
+                        plot_model_properties('type')),
+          nrow=2,ncol=2,align='hv',legend='bottom',common.legend = TRUE)
 
-ggsave(g_perf_dataset, file='outputs/figures/g_perf_dataset.pdf',
-       width=7,height=7)
-
-# r.squaredGLMM(perf_dataset_richness$model)
-# r.squaredGLMM(perf_dataset_composition$model)
-r.squaredGLMM(perf_dataset_abundance$model)
+ggsave(g_dataset_properties_visreg,
+       file='outputs/figures/g_dataset_properties_visreg.pdf',width=7,height=7)
+ggsave(g_dataset_properties_visreg,
+       file='outputs/figures/g_dataset_properties_visreg.png',width=7,height=7)
 
 
 
@@ -314,29 +410,114 @@ r.squaredGLMM(perf_dataset_abundance$model)
 
 
 
-#### FIND BEST CASES
-source('utils/pick_datasets.R')
-source('utils/log_seq.R')
-possible_num_train = ceiling(log_seq(1e1,1e4,length.out=20))
-
-cases_all = data.frame(name=names(names_nice), fn_assemblages=c('data/annual_plant/assemblages_annual_plant_18.csv',
-                                                                                           'data/cedar_creek/cedar_creek_2018.csv',
-                                                                                           'data/fly/data_fly.csv',
-                                                                                           'data/glv/assemblages_H_12.csv',
-                                                                                           'data/glv/assemblages_M_11.csv',
-                                                                                           'data/sortie/data_sortie.csv',
-                                                                                           'data/friedman_gore/data_friedman_gore.csv'))
-cases = cases_all %>%
-  filter(name %in% c('annual_plant','human_gut','mouse_gut','sortie-nd_plants')) # only do the complete datasets
 
 
-# because the outputs are too big, first download them
-# cd /global/scratch/users/benjaminblonder
-# find love/outputs/statistical | grep -e "method=rf\\_" | grep -e "num\\_train=89" | grep -e "experimental\\_design=mixed" | grep -e "response=abundance" | zip -@ test89.zip
-# copy test.zip to local directory, move contents to outputs/statistical
-# also find love/outputs/statistical | grep -e "method=rf\\_" | grep -e "num\\_train=546" | grep -e "experimental\\_design=mixed" | grep -e "response=abundance" | zip -@ test546.zip
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+make_obs_pred_abundance_figure <- function(num_train, method_this='rf',experimental_design_this='mixed')
+{
+  predictions_abundance_all_for_scatter = rbindlist(lapply(1:nrow(cases_all), function(j) {
+    cat('.')
+    z = pick_datasets(name=cases_all$name[j], 
+                      method=method_this,
+                      num_train=num_train,
+                      experimental_design = experimental_design_this,
+                      response_var = 'abundance')
+    
+    #return(z)}))
+    
+    z_all = rbindlist(lapply(1:length(z$files_pred_test), function(i)
+    {
+      #print(paste(cases_all$name[j], i))
+      if(length(z) > 0)
+      {
+        df_pred_test_this = read.csv(z$files_pred_test[i])
+        df_obs_test_this = read.csv(z$files_obs_test[i])
+        
+        df_this = cbind(reshape2::melt(df_pred_test_this) %>%
+                          rename(abundance_pred=value),
+                        reshape2::melt(df_obs_test_this) %>%
+                          rename(abundance_obs=value) %>%
+                          select(-variable)) %>%
+          mutate(rep=i) %>%
+          mutate(variable=gsub("\\.star","",variable))
+        
+        df_this$name = cases_all$name[j]
+        
+        return(df_this)
+      }
+      else
+      {
+        return(NULL)
+      }
+    }))
+    
+    #
+    
+    return(z_all)
+  }))
+  
+  # reduce # of cases to make the plotting work
+  predictions_abundance_all_for_scatter_small = predictions_abundance_all_for_scatter %>%
+    group_by(name, rep, variable) %>%
+    sample_n(size=min(100,n())) %>%
+    mutate(rep.factor=factor(rep))
+  
+  g_abundance_scatter = ggplot(predictions_abundance_all_for_scatter_small, aes(x=abundance_pred,
+                                                                                y=abundance_obs,
+                                                                                color=variable)) + 
+    geom_line(stat="smooth",method = "lm", se=FALSE,alpha=0.5,size=0.75, mapping=aes(group=paste(variable, rep))) +
+    geom_point(alpha=0.5) +
+    theme_bw() +
+    geom_abline(slope=1,linewidth=2,alpha=0.5) +
+    scale_color_hue(l=50,h=c(10,350)) +
+    facet_wrap(~name,scales='free',labeller=as_labeller(names_nice),nrow=2) +
+    labs(color='Species') +
+    xlab('Abundance (predicted)') +
+    ylab('Abundance (observed)')
+  
+  ggsave(g_abundance_scatter, file=sprintf('outputs/figures/g_abundance_scatter_%d.pdf', num_train),width=12,height=8)
+  ggsave(g_abundance_scatter, file=sprintf('outputs/figures/g_abundance_scatter_%d.png', num_train),width=12,height=8)
+}
+
+make_obs_pred_abundance_figure(num_train=89, method='rf', experimental_design='mixed')
+make_obs_pred_abundance_figure(num_train=546, method='rf', experimental_design='mixed')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### PRIORITIZATION
 
 datasets_preds = lapply(1:nrow(cases), function(i) {
   cat(i)
@@ -502,24 +683,7 @@ check_unwanted <- function(dataset_name_this)
   result_best = lapply(stats_unwanted_this, function(x) { x$predictions_best_remove_unwanted })
   return(list(result_df=result_df, result_best=result_best))
 }
-results_unwanted_all = lapply(cases$name, check_unwanted) # this runs slowly due to the annual plant dataset
-
-
-g_unwanted_all = ggplot(lapply(results_unwanted_all, function(x) {x[[1]]}) %>% 
-                          rbindlist %>% 
-                          select(name, id_unwanted, Sensitivity, Specificity) %>% 
-                          melt(id.vars=c("name","id_unwanted")) %>%
-                          mutate(value=ifelse(is.na(value),0,value)) %>%
-                          mutate(id_unwanted = letters[id_unwanted]), 
-                        aes(x=factor(id_unwanted),y=value,color=variable)) + 
-  facet_wrap(~name,scales='free_x',labeller=as_labeller(names_nice),nrow=1) +
-  geom_boxplot() +
-  theme_bw() +
-  ggtitle("Remove unwanted species") +
-  xlab("Unwanted species") + ylab("Value (train + test)") +
-  scale_color_manual(values=colorBlindBlack8,name='Statistic') +
-  theme(legend.position='bottom') +
-  theme(axis.text=element_text(size=6))
+results_unwanted_all = lapply(cases$name, check_unwanted) # this runs slowly due to the annual plant dataset which is very large
 
 
 
@@ -549,6 +713,25 @@ predictions_best_total_abundance = lapply(1:length(datasets_preds),
 
 
 # plot performance
+g_unwanted_all = ggplot(lapply(results_unwanted_all, function(x) {x[[1]]}) %>% 
+                          rbindlist %>% 
+                          select(name, id_unwanted, Sensitivity, Specificity) %>% 
+                          melt(id.vars=c("name","id_unwanted")) %>%
+                          mutate(value=ifelse(is.na(value),0,value)) %>%
+                          mutate(id_unwanted = letters[id_unwanted]), 
+                        aes(x=factor(id_unwanted),y=value,color=variable)) + 
+  facet_wrap(~name,scales='free_x',labeller=as_labeller(names_nice),nrow=1) +
+  #geom_boxplot() +
+  geom_point(position=position_jitterdodge(jitter.width = 0.5),alpha=0.5) +
+  theme_bw() +
+  ggtitle("Remove unwanted species") +
+  xlab("Unwanted species") + ylab("Value (train + test)") +
+  scale_color_manual(values=colorBlindBlack8,name='Statistic') +
+  theme(legend.position='bottom') +
+  theme(axis.text=element_text(size=6))
+
+
+
 best_experiments_classification_statistics <- function(predictions_best, title)
 {
   df_best_experiments_classification_statistics = lapply(predictions_best, 
@@ -569,7 +752,8 @@ best_experiments_classification_statistics <- function(predictions_best, title)
   ggplot(df_best_experiments_classification_statistics %>% 
            mutate(name_nice=names_nice[name]), 
          aes(x=variable,y=value,color=name_nice)) +
-    geom_boxplot() +
+    #geom_boxplot() +
+    geom_point(position=position_jitterdodge(jitter.width = 0.5),alpha=0.5) +
     ylim(0,1) +
     theme_bw() +
     xlab("Statistic") +
@@ -583,15 +767,36 @@ g_best_experiments_classification_statistics_shannons_H = best_experiments_class
                                                                                                      ">95% quantile Shannon's H")
 g_best_experiments_classification_statistics_total_abundance = best_experiments_classification_statistics(predictions_best_total_abundance, 
                                                                                                           ">95% quantile total abundance")
-ggsave(ggarrange(g_unwanted_all,
-                 ggarrange(g_best_experiments_classification_statistics_shannons_H, 
-                           g_best_experiments_classification_statistics_total_abundance,
-                           nrow=1,ncol=2,labels=c('b','c'),align='hv',common.legend = TRUE, legend='bottom'),
-                 nrow=2,ncol=1,labels=c('a','')),
+
+
+g_best_experiments_classification_statistics = ggarrange(g_unwanted_all,
+          ggarrange(g_best_experiments_classification_statistics_shannons_H, 
+                    g_best_experiments_classification_statistics_total_abundance,
+                    nrow=1,ncol=2,labels=c('b','c'),align='hv',common.legend = TRUE, legend='bottom'),
+          nrow=2,ncol=1,labels=c('a',''))
+
+ggsave(g_best_experiments_classification_statistics,
        file='outputs/figures/g_best_experiments_classification_statistics.pdf',
+       width=8,height=6)
+ggsave(g_best_experiments_classification_statistics,
+       file='outputs/figures/g_best_experiments_classification_statistics.png',
        width=8,height=6)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### PLOT presence/absence matrices of best experiments
 
 prep_best_experiments_matrix <- function(fn_assemblages, predictions_this)
 {
@@ -649,7 +854,7 @@ best_rows_unwanted = lapply(results_unwanted_all, function(x) {x[[1]] %>%
 # reorder by case
 best_rows_unwanted = best_rows_unwanted[match(best_rows_unwanted$name, cases$name),]
 
-# pick bets experiments as those with maximum specificity
+# pick best experiments as those with maximum specificity
 predictions_best_remove_unwanted = lapply(1:nrow(best_rows_unwanted), function(dataset_index) {
   results_unwanted_all[[ dataset_index ]][[ 2 ]][[ best_rows_unwanted$id_unwanted[dataset_index] ]]
 })
@@ -835,86 +1040,158 @@ ggsave(g_best_experiments_presence_absence_all,
 
 
 
+### SHOW matrices of best experiments
 
-
-
-
-
-
-
-
-
-make_obs_pred_abundance_figure <- function(num_train)
+plot_best_experiments_new <- function(predictions_this, num_experiments_max=5000)
+{
+  cat('.')
+  experiments_matrix = rbindlist(lapply(predictions_this$experiments_ALL, function(x) { 
+    x = strsplit(x, split="\\*"); as.data.frame(t(as.numeric(unlist(x)))) }) )
+  
+  # do some resampling due to memory issues
+  if (length(which(predictions_this$indices_best_ACTUAL==TRUE)) > num_experiments_max)
   {
-  predictions_abundance_all_for_scatter = rbindlist(lapply(1:nrow(cases_all), function(j) {
-    cat('.')
-    z = pick_datasets(name=cases_all$name[j], 
-                      method='rf',
-                      num_train=num_train,
-                      experimental_design = 'mixed',
-                      response_var = 'abundance')
+    predictions_this$indices_best_ACTUAL = sample(which(predictions_this$indices_best_ACTUAL==TRUE), num_experiments_max, replace=FALSE)
+  }
+  if (length(which(predictions_this$indices_best_PREDICTED==TRUE)) > num_experiments_max)
+  {
+    predictions_this$indices_best_PREDICTED = sample(which(predictions_this$indices_best_PREDICTED==TRUE), num_experiments_max, replace=FALSE)
+  }
+  
+  m_experiments_best_actual = experiments_matrix[predictions_this$indices_best_ACTUAL,]
+  m_experiments_best_predicted = experiments_matrix[predictions_this$indices_best_PREDICTED,]
+  
+  m_outcomes_best_actual = predictions_this$abundances_ALL[predictions_this$indices_best_ACTUAL,]
+  m_outcomes_best_predicted = predictions_this$abundances_ALL[predictions_this$indices_best_PREDICTED,]
+  
+  cat('.')
+  print(dim(m_outcomes_best_actual))
+  order_actual = hclust(dist(m_outcomes_best_actual))$order
+  
+  if (predictions_this$stats$Specificity>0)
+  {
+    order_predicted = hclust(dist(m_outcomes_best_predicted))$order
+  }
+  
+  plot_matrix_heatmap <- function(m, ordering, type)
+  {
+    names(m) = letters[1:ncol(m)]
+    row.names(m) <- 1:nrow(m)
     
-    #return(z)}))
-    
-    z_all = rbindlist(lapply(1:length(z$files_pred_test), function(i)
+    if(!is.null(ordering))
     {
-      #print(paste(cases_all$name[j], i))
-      if(length(z) > 0)
-      {
-        df_pred_test_this = read.csv(z$files_pred_test[i])
-        df_obs_test_this = read.csv(z$files_obs_test[i])
+      m = m[ordering,]
+    }
     
-        df_this = cbind(reshape2::melt(df_pred_test_this) %>%
-                          rename(abundance_pred=value),
-                        reshape2::melt(df_obs_test_this) %>%
-                          rename(abundance_obs=value) %>%
-                          select(-variable)) %>%
-          mutate(rep=i) %>%
-          mutate(variable=gsub("\\.star","",variable))
-        
-        df_this$name = cases_all$name[j]
-        
-        return(df_this)
-      }
-      else
-      {
-        return(NULL)
-      }
-    }))
+    m_melted = m %>% # Data wrangling
+      rowid_to_column(var="Y") %>%
+      gather(key="X", value="Z", -1)# %>%
+    # Change Y to numeric
+    #mutate(Y=as.numeric(gsub("V","",Y)))
     
-    #
+    if (type=='experiment')
+    {
+      m_melted$Z = factor(m_melted$Z,levels=c(0,1))
+    }
     
-    return(z_all)
-  }))
+    g = ggplot(m_melted, aes(x=X,y=Y,fill=Z)) +
+      geom_tile() +
+      theme_bw() + 
+      scale_x_discrete(expand=c(0,0)) + 
+      scale_y_continuous(expand=c(0,0)) +
+      theme(axis.text.y=element_blank(),
+            axis.ticks.y=element_blank(),
+            axis.title.y=element_blank(),
+            axis.title.x=element_blank(),
+            plot.margin=margin(t=20,l=10))
+    
+    if (type=='experiment')
+    {
+      g = g +
+        scale_fill_manual(values=brewer.pal(9,"Oranges")[c(3,9)],name='Experimental action')
+    }
+    else if (type=='outcome')
+    {
+      g = g +
+        scale_fill_gradientn(colors=brewer.pal(9,"YlGnBu"),name='Outcome abundance')
+    }
+    
+    return(g)
+  }
   
-  # reduce # of cases to make the plotting work
-  predictions_abundance_all_for_scatter_small = predictions_abundance_all_for_scatter %>%
-    group_by(name, rep, variable) %>%
-    sample_n(size=min(100,n())) %>%
-    mutate(rep.factor=factor(rep))
+  cat('.')
+  g_e_a = plot_matrix_heatmap(m_experiments_best_actual,order_actual,type='experiment') + ggtitle('Actual')
+  if (predictions_this$stats$Specificity>0)
+  {
+    g_e_p = plot_matrix_heatmap(m_experiments_best_predicted,order_predicted,type='experiment') + ggtitle('Predicted')
+  }
+  else
+  {
+    g_e_p = ggplot()
+  }
+  g_o_a = plot_matrix_heatmap(m_outcomes_best_actual,order_actual,type='outcome')
+  if (predictions_this$stats$Specificity>0)
+  {
+    g_o_p = plot_matrix_heatmap(m_outcomes_best_predicted,order_predicted,type='outcome')
+  }
+  else
+  {
+    g_o_p = ggplot()
+  }
   
-  g_abundance_scatter = ggplot(predictions_abundance_all_for_scatter_small, aes(x=abundance_pred,
-                                                                                y=abundance_obs,
-                                                                                color=variable,
-                                                                                shape=rep.factor)) + 
-    geom_line(stat="smooth",method = "lm", se=FALSE,alpha=0.5,size=0.75) +
-    geom_point(alpha=0.5) +
-    theme_bw() +
-    geom_abline(slope=1,linewidth=2,alpha=0.5) +
-    scale_shape_manual(values=1:nlevels(predictions_abundance_all_for_scatter_small$rep.factor)) + 
-    scale_color_hue(l=50,h=c(10,350)) +
-    facet_wrap(~name,scales='free',labeller=as_labeller(names_nice),nrow=2) +
-    labs(color='Species',shape='Replicate') +
-    xlab('Abundance (predicted)') +
-    ylab('Abundance (observed)') # +
-    #scale_x_sqrt() + 
-    #scale_y_sqrt()
+  g_e = ggarrange(g_e_p, g_e_a, 
+                  nrow=1,ncol=2,
+                  common.legend = TRUE,
+                  align='hv',
+                  #labels=c('a', 'b'),
+                  legend='bottom')
   
-  ggsave(g_abundance_scatter, file=sprintf('outputs/figures/g_abundance_scatter_%d.pdf', num_train),width=12,height=8)
+  g_o = ggarrange(g_o_p, g_o_a, 
+                  nrow=1,ncol=2,
+                  common.legend = TRUE,
+                  align='hv',
+                  #labels=c('c', 'd'),
+                  legend='bottom')
+  
+  g_final = ggarrange(g_e, g_o, 
+                      nrow=2,ncol=1,align='hv')
+  cat('+\n')
+  
+  return(g_final)
 }
 
-make_obs_pred_abundance_figure(num_train=89)
-make_obs_pred_abundance_figure(num_train=546)
+
+pick_highest_sensitivity_replicate_within_dataset <- function(predictions_best)
+{
+  sensitivities = sapply(predictions_best, function(x) {x$stats$Specificity})
+  
+  index_selected = which.max(sensitivities)
+  print(index_selected)
+  
+  return(predictions_best[[index_selected]])
+}
+
+plots_best_shannons_H = lapply(lapply(predictions_best_shannons_H, 
+                                      pick_highest_sensitivity_replicate_within_dataset),
+                               plot_best_experiments_new)
+
+plots_best_total_abundance = lapply(lapply(predictions_best_total_abundance, 
+                                           pick_highest_sensitivity_replicate_within_dataset),
+                                    plot_best_experiments_new)
+
+plots_best_remove_unwanted = lapply(lapply(predictions_best_remove_unwanted, # these are already the 1 species we can best find to remove
+                                           pick_highest_sensitivity_replicate_within_dataset),
+                                    plot_best_experiments_new)
+
+g_best_shannons_H = ggarrange(plotlist=plots_best_shannons_H,nrow=2,ncol=2,
+                              labels=sprintf("(%s) %s", letters[1:4],names_nice[cases$name]))
+g_best_total_abundance = ggarrange(plotlist=plots_best_total_abundance,nrow=2,ncol=2,
+                                   labels=sprintf("(%s) %s", letters[1:4],names_nice[cases$name]))
+g_best_remove_unwanted = ggarrange(plotlist=plots_best_remove_unwanted,nrow=2,ncol=2,
+                                   labels=sprintf("(%s) %s", letters[1:4],names_nice[cases$name]))
+ggsave(g_best_shannons_H, file='outputs/figures/g_best_shannons_H.png',width=20,height=20)
+ggsave(g_best_total_abundance, file='outputs/figures/g_best_total_abundance.png',width=20,height=20)
+ggsave(g_best_remove_unwanted, file='outputs/figures/g_best_remove_unwanted.png',width=20,height=20)
 
 
 
@@ -924,32 +1201,48 @@ make_obs_pred_abundance_figure(num_train=546)
 
 
 
-# make bar graphs or pies
-z_pred = predictions_best_shannons_H[[2]][[4]]$abundances_best_ACTUAL_FOR_PREDICTIONS %>%
-  mutate(row_id = 1:n()) %>%
-  pivot_longer(cols=!row_id, names_to='species',values_to='abundance')
-z_actual = predictions_best_shannons_H[[2]][[4]]$abundances_best_ACTUAL_FOR_ACTUAL %>%
-  mutate(row_id = 1:n()) %>%
-  pivot_longer(cols=!row_id, names_to='species',values_to='abundance')
-
-# show actual abundance outcomes for the real best and the selected best experiments
-ggplot(z_actual, aes(x=row_id,y=abundance,fill=species)) +
-  geom_bar(stat='identity') +
-  theme_bw() + 
-  coord_flip()
-
-ggplot(z_pred, aes(x=row_id,y=abundance,fill=species)) +
-  geom_bar(stat='identity') +
-  theme_bw() + 
-  coord_flip()
-
-# show the experimental conditions of the predicted best experiments
-predictions_best_shannons_H[[4]][[10]]$experiments_best_PREDICTED_matrix %>%
-  as.matrix %>%
-  heatmap(scale='none',Colv=NA,keep.dendro=FALSE)
 
 
-# do a NMDS of the actual outcomes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# do a PCA of the actual outcomes
 best_predictions_pca <- function(predictions_this, title="")
 {
   df_this = predictions_this$abundances_ALL
@@ -967,7 +1260,7 @@ best_predictions_pca <- function(predictions_this, title="")
   
   print(table(indices_category))
   
-  pc_this = prcomp(sqrt(df_this),scale=TRUE,center=TRUE) # sqrt + centering/scaling
+  pc_this = prcomp((df_this)^(1/4),scale=TRUE,center=TRUE) # sqrt + centering/scaling
   
   #pc_this$x = pc_this$x[order(indices_category),]
   #indices_category = indices_category[order(indices_category)]
@@ -1003,7 +1296,7 @@ best_predictions_pca <- function(predictions_this, title="")
   return(g_biplot)
 }
 
-best_predictions_pca_all <- function(predictions, title="")
+best_predictions_pca_all <- function(predictions, extra_string=rep("",length(predictions)))
 {
   names_nice_this = names_nice[cases$name]
   g_list = lapply(1:length(names_nice_this), function(i)
@@ -1016,7 +1309,7 @@ best_predictions_pca_all <- function(predictions, title="")
     print(counts_predictions)
     index_ensemble = which.max(counts_predictions)
     
-    g = best_predictions_pca(predictions[[i]][[index_ensemble]], title=sprintf("(%s) %s",letters[i],names_nice[cases$name[i]]))
+    g = best_predictions_pca(predictions[[i]][[index_ensemble]], title=sprintf("(%s) %s%s",letters[i],names_nice[cases$name[i]], extra_string[i]))
   })
   g_final = ggarrange(plotlist = g_list,
                       #align='hv',
@@ -1025,22 +1318,24 @@ best_predictions_pca_all <- function(predictions, title="")
   return(g_final)
 }
 
-g_best_hexbin_shannons_H = best_predictions_pca_all(predictions_best_shannons_H,"Maximize Shannon's H")
+g_best_hexbin_shannons_H = best_predictions_pca_all(predictions_best_shannons_H)
 ggsave(g_best_hexbin_shannons_H, file='outputs/figures/g_best_hexbin_shannons_H.pdf',width=8,height=10)
+ggsave(g_best_hexbin_shannons_H, file='outputs/figures/g_best_hexbin_shannons_H.png',width=8,height=10)
 
-g_best_hexbin_abundance = best_predictions_pca_all(predictions_best_total_abundance,"Maximize abundance")
+g_best_hexbin_abundance = best_predictions_pca_all(predictions_best_total_abundance)
 ggsave(g_best_hexbin_abundance, file='outputs/figures/g_best_hexbin_abundance.pdf',width=8,height=10)
-
+ggsave(g_best_hexbin_abundance, file='outputs/figures/g_best_hexbin_abundance.png',width=8,height=10)
 
 reorder_best_species <- function(results_unwanted, species_this=1)
 {
   #results_unwanted_all[[1]]$result_best[[1]][[1]]  %>% names# dataset, species, replicate
-  lapply(results_unwanted, function(r) {
-    return(r$result_best[[species_this]])
+  lapply(1:length(results_unwanted), function(i) {
+    return(results_unwanted[[i]]$result_best[[species_this[i] ]])
     })
 }
 
 
 g_best_hexbin_removal = best_predictions_pca_all(
-  reorder_best_species(results_unwanted_all, species_this=2),"Remove species 'b'")
+  reorder_best_species(results_unwanted_all, species_this=c(18, 10, 9, 6)), paste("- Species", letters[c(18, 10, 9, 6)]))
 ggsave(g_best_hexbin_removal, file='outputs/figures/g_best_hexbin_removal.pdf',width=8,height=10)
+ggsave(g_best_hexbin_removal, file='outputs/figures/g_best_hexbin_removal.png',width=8,height=10)
