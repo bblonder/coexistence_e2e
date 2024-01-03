@@ -1582,3 +1582,24 @@ g_best_hexbin_removal_264 = best_predictions_pca_all(best_case_removals_264, is_
 ggsave(ggarrange(g_best_hexbin_removal_89, g_best_hexbin_removal_264,labels='auto'), file='outputs/figures/g_best_hexbin_removal.pdf',width=16,height=10)
 ggsave(ggarrange(g_best_hexbin_removal_89, g_best_hexbin_removal_264,labels='auto'), file='outputs/figures/g_best_hexbin_removal.png',width=16,height=10)
 
+
+# summarize stats
+df_prioritization_stats_abundance %>% 
+  filter(num_train==89) %>%
+  select(Sensitivity,Specificity) %>%
+  colMeans
+
+df_prioritization_stats_shannons_h %>% 
+  filter(num_train==89) %>%
+  select(Sensitivity,Specificity) %>%
+  colMeans
+
+df_prioritization_stats_removal %>% 
+  filter(num_train==89) %>%
+  select(Sensitivity,Specificity) %>%
+  colMeans(na.rm=T)
+
+df_all %>% 
+  filter(num_train==89 & method=='rf' & experimental_design=='mixed') %>% 
+  group_by(name) %>% 
+  summarize(mean(abundance_mae_mean_test_scaled_clipped,na.rm=T))
