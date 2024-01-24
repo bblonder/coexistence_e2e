@@ -5,7 +5,7 @@ library(ggpubr)
 
 source('utils/quantile_trim.R')
 
-plot_data <- function(data,name)
+plot_data <- function(data,name,trim=TRUE)
 {
   # count # of species
   n_sp = data %>% select(contains("star")) %>% ncol
@@ -14,7 +14,10 @@ plot_data <- function(data,name)
   data = data %>% arrange(across(all_of(1:n_sp)))
   
   # flag quantile outliers
-  data = quantile_max_trim(data)
+  if (trim==TRUE)
+  {
+    data = quantile_max_trim(data)
+  }
   # plot abundance structure
 
   data_in = data %>%
@@ -29,7 +32,7 @@ plot_data <- function(data,name)
   
   g_in = ggplot(data_in, aes(x=variable,y=row,fill=factor(value))) + 
     geom_raster() +
-    scale_fill_manual(values=c('white','orange'),labels=c('Absent','Present'),name='') +
+    scale_fill_manual(values=c('white','orange'),labels=c('Absent','Present'),name='Experimental\naction') +
     theme_bw() +
     xlab('Species') +
     ylab('Experiment') +

@@ -68,7 +68,7 @@ varnames_nice = c(experimental_design='Experimental design',
                   num_species_dataset='Dataset, total # species',
                   type='Dataset, type',
                   num_losses_mean='Outcome, mean # species lost',
-                  abundance_skewness_mean='Outcome, mean abundance skewness',
+                  abundance_final_skewness_mean='Outcome, mean abundance skewness',
                   nice_name='Dataset'
                   )
 
@@ -377,7 +377,7 @@ df_all_for_regression_dataset = df_all %>%
 
 
 m_dataset_properties = lmer(abundance_mae_mean_test_scaled_clipped ~ (1|name) + 
-                              log10(num_train)*num_species_dataset*type*num_losses_mean*abundance_skewness_mean,
+                              log10(num_train)*num_species_dataset*type*num_losses_mean*abundance_final_skewness_mean,
      data=df_all_for_regression_dataset)
 r.squaredGLMM(m_dataset_properties)
 res_dataset_properties = simulateResiduals(m_dataset_properties,n=1000)
@@ -397,7 +397,7 @@ plot_model_properties <- function(xvar)
 
 g_dataset_properties_visreg = ggarrange(plotlist=list(plot_model_properties('num_species_dataset'),
                         plot_model_properties('num_losses_mean'),
-                        plot_model_properties('abundance_skewness_mean'),
+                        plot_model_properties('abundance_final_skewness_mean'),
                         plot_model_properties('type')),
                         labels='auto',
           nrow=2,ncol=2,align='hv',legend='bottom',common.legend = TRUE)
@@ -558,7 +558,7 @@ calculate_training_properties <- function(df_exp)
   df_results = data.frame(skewnesses,richness_experiment,richness_outcome) %>%
     mutate(num_losses = richness_experiment - richness_outcome) %>%
     summarize(num_losses_mean = mean(num_losses), 
-              abundance_skewness_mean = mean(skewnesses))
+              abundance_final_skewness_mean = mean(skewnesses))
   
   return(df_results)
 }
@@ -799,9 +799,9 @@ g_unwanted_all = ggplot(rbind(df_summary_removal_89,df_summary_removal_264) %>%
                           select(num_train, name_nice, id_unwanted,Sensitivity, Specificity) %>% 
                           melt(id.vars=c("num_train","name_nice","id_unwanted")), 
                         aes(x=factor(num_train),y=value,color=name_nice)) + 
-  facet_wrap(~variable,scales='free_x',labeller=as_labeller(c(names_nice,Sensitivity='Sensitivity',Specificity='Specificity'))) +
+  facet_wrap(~variable,scales='free_x',labeller=as_labeller(c(names_nice,Sensitivity='True positive rate',Specificity='True negative rate'))) +
   geom_point(position=position_jitterdodge(jitter.width = 0.5),alpha=0.5) +
-  geom_label_repel(show.legend=FALSE, max.overlaps = 20, data=rbind(df_summary_unwanted_worst_89,df_summary_unwanted_worst_264), mapping=aes(x=factor(num_train),y=mean_specificity,color=name_nice,label=id_unwanted),position=position_jitterdodge(jitter.width = 0.5),alpha=0.5) +
+  geom_label_repel(show.legend=FALSE, max.overlaps = 20, data=rbind(df_summary_removal_worst_89,df_summary_removal_worst_264), mapping=aes(x=factor(num_train),y=mean_specificity,color=name_nice,label=id_unwanted),position=position_jitterdodge(jitter.width = 0.5),alpha=0.5) +
   theme_bw() +
   ggtitle("Remove unwanted species") +
   xlab("Number of training cases") + ylab("Value (train + test)") +
@@ -844,7 +844,7 @@ plot_best_experiments_classification_statistics <- function(predictions_best_lis
   ggplot(df_best_experiments_classification_statistics %>% 
            mutate(name_nice=names_nice[name]), 
          aes(x=factor(num_train),y=value,color=name_nice)) +
-    facet_wrap(~variable) +
+    facet_wrap(~variable,labeller=as_labeller(c(names_nice,Sensitivity='True positive rate',Specificity='True negative rate'))) +
     #geom_boxplot() +
     geom_point(position=position_jitterdodge(jitter.width = 0.25),alpha=0.5) +
     ylim(0,1) +
@@ -905,7 +905,7 @@ df_prioritization_stats_abundance = rbind(get_classification_stats(predictions_b
 
 
 
-m_specificity_removal = lmer(Specificity ~ log10(num_train) + num_losses_mean + abundance_skewness_mean + num_species_dataset + (1|name_nice) + (1|id_unwanted),
+m_specificity_removal = lmer(Specificity ~ log10(num_train) + num_losses_mean + abundance_final_skewness_mean + num_species_dataset + (1|name_nice) + (1|id_unwanted),
      data=df_prioritization_stats_removal)
 Anova(m_specificity_removal)
 r.squaredGLMM(m_specificity_removal)
@@ -913,14 +913,14 @@ res_specificity_removal = simulateResiduals(m_specificity_removal,n=1000)
 plot(res_specificity_removal)
 
 
-m_specificity_shannons_h = lmer(Specificity ~ log10(num_train) + num_losses_mean + abundance_skewness_mean + num_species_dataset + (1|name_nice),
+m_specificity_shannons_h = lmer(Specificity ~ log10(num_train) + num_losses_mean + abundance_final_skewness_mean + num_species_dataset + (1|name_nice),
                                 data=df_prioritization_stats_shannons_h)
 Anova(m_specificity_shannons_h)
 r.squaredGLMM(m_specificity_shannons_h)
 res_specificity_shannons_h = simulateResiduals(m_specificity_shannons_h,n=1000)
 plot(res_specificity_shannons_h)
 
-m_specificity_abundance = lmer(Specificity ~ log10(num_train) + num_losses_mean + abundance_skewness_mean + num_species_dataset + (1|name_nice),
+m_specificity_abundance = lmer(Specificity ~ log10(num_train) + num_losses_mean + abundance_final_skewness_mean + num_species_dataset + (1|name_nice),
                                 data=df_prioritization_stats_abundance)
 Anova(m_specificity_abundance)
 r.squaredGLMM(m_specificity_abundance)
@@ -935,22 +935,22 @@ plot_specificity_model_properties <- function(model_this, xvar)
     theme_bw() +
     scale_color_brewer(palette='Set1',name='Number of training cases') +
     scale_fill_brewer(palette='Set1',name='Number of training cases') +
-    ylab('Specificity') +
+    ylab('True negative rate') +
     xlab(varnames_nice[xvar]) +
     scale_y_continuous(breaks=c(0,0.5,1),limits=c(-0.2,1.2))
 }
 
-pl1 = lapply(c('num_species_dataset','num_losses_mean','abundance_skewness_mean'), 
+pl1 = lapply(c('num_species_dataset','num_losses_mean','abundance_final_skewness_mean'), 
              plot_specificity_model_properties, 
              model_this=m_specificity_removal)
 pl1[[1]] = pl1[[1]] + ggtitle('Remove unwanted species')
 
-pl2 = lapply(c('num_species_dataset','num_losses_mean','abundance_skewness_mean'), 
+pl2 = lapply(c('num_species_dataset','num_losses_mean','abundance_final_skewness_mean'), 
              plot_specificity_model_properties, 
              model_this=m_specificity_shannons_h)
 pl2[[1]] = pl2[[1]] + ggtitle(">95% quantile Shannon's H")
 
-pl3 = lapply(c('num_species_dataset','num_losses_mean','abundance_skewness_mean'), 
+pl3 = lapply(c('num_species_dataset','num_losses_mean','abundance_final_skewness_mean'), 
              plot_specificity_model_properties, 
              model_this=m_specificity_removal)
 pl3[[1]] = pl3[[1]] + ggtitle(">95% quantile abundance")
@@ -1398,50 +1398,50 @@ ggsave(g_best_abundance_264, file='outputs/figures/g_best_abundance_264.png',wid
 
 
 
-
-
-# broken below this line
-plots_best_shannons_H_264 = lapply(lapply(predictions_best_shannons_H_264, 
-                                         pick_highest_sensitivity_replicate_within_dataset),
-                                  plot_best_experiments_new)
-
-plots_best_total_abundance_89 = lapply(lapply(predictions_best_total_abundance_89, 
-                                           pick_highest_sensitivity_replicate_within_dataset),
-                                    plot_best_experiments_new)
-
-plots_best_total_abundance_264 = lapply(lapply(predictions_best_total_abundance_264, 
-                                              pick_highest_sensitivity_replicate_within_dataset),
-                                       plot_best_experiments_new)
-
-plots_best_removal_89 = lapply(lapply(predictions_best_removal_all_89, # these are already the 1 species we can best find to remove
-                                           pick_highest_sensitivity_replicate_within_dataset),
-                                    plot_best_experiments_new)
-
-plots_best_removal_264 = lapply(lapply(predictions_best_removal_all_264, # these are already the 1 species we can best find to remove
-                                              pick_highest_sensitivity_replicate_within_dataset),
-                                       plot_best_experiments_new)
-
-g_best_shannons_H_89 = ggarrange(plotlist=plots_best_shannons_H_89,nrow=2,ncol=2,
-                              labels=sprintf("(%s) %s", letters[1:4],names_nice[cases$name]))
-g_best_total_abundance_89 = ggarrange(plotlist=plots_best_total_abundance_89,nrow=2,ncol=2,
-                                   labels=sprintf("(%s) %s", letters[1:4],names_nice[cases$name]))
-g_best_remove_unwanted_89 = ggarrange(plotlist=plots_best_remove_unwanted_89,nrow=2,ncol=2,
-                                   labels=sprintf("(%s) %s - Species %s", letters[1:4],names_nice[cases$name], species_this=c(18, 10, 9, 6)))
-ggsave(g_best_shannons_H_89, file='outputs/figures/g_best_shannons_H_89.png',width=20,height=20)
-ggsave(g_best_total_abundance_89, file='outputs/figures/g_best_total_abundance_89.png',width=20,height=20)
-ggsave(g_best_remove_unwanted_89, file='outputs/figures/g_best_remove_unwanted_264.png',width=20,height=20)
-
-g_best_shannons_H_264 = ggarrange(plotlist=plots_best_shannons_H_264,nrow=2,ncol=2,
-                                  labels=sprintf("(%s) %s", letters[1:4],names_nice[cases$name]))
-g_best_total_abundance_264 = ggarrange(plotlist=plots_best_total_abundance_264,nrow=2,ncol=2,
-                                       labels=sprintf("(%s) %s", letters[1:4],names_nice[cases$name]))
-g_best_remove_unwanted_264 = ggarrange(plotlist=plots_best_remove_unwanted_264,nrow=2,ncol=2,
-                                       labels=sprintf("(%s) %s - Species %s", letters[1:4],names_nice[cases$name], species_this=c(18, 10, 9, 6)))
-ggsave(g_best_shannons_H_264, file='outputs/figures/g_best_shannons_H_264.png',width=20,height=20)
-ggsave(g_best_total_abundance_264, file='outputs/figures/g_best_total_abundance_264.png',width=20,height=20)
-ggsave(g_best_remove_unwanted_264, file='outputs/figures/g_best_remove_unwanted_264.png',width=20,height=20)
-
-
+# 
+# 
+# # broken below this line
+# plots_best_shannons_H_264 = lapply(lapply(predictions_best_shannons_H_264, 
+#                                          pick_highest_sensitivity_replicate_within_dataset),
+#                                   plot_best_experiments_new)
+# 
+# plots_best_total_abundance_89 = lapply(lapply(predictions_best_total_abundance_89, 
+#                                            pick_highest_sensitivity_replicate_within_dataset),
+#                                     plot_best_experiments_new)
+# 
+# plots_best_total_abundance_264 = lapply(lapply(predictions_best_total_abundance_264, 
+#                                               pick_highest_sensitivity_replicate_within_dataset),
+#                                        plot_best_experiments_new)
+# 
+# plots_best_removal_89 = lapply(lapply(predictions_best_removal_all_89, # these are already the 1 species we can best find to remove
+#                                            pick_highest_sensitivity_replicate_within_dataset),
+#                                     plot_best_experiments_new)
+# 
+# plots_best_removal_264 = lapply(lapply(predictions_best_removal_all_264, # these are already the 1 species we can best find to remove
+#                                               pick_highest_sensitivity_replicate_within_dataset),
+#                                        plot_best_experiments_new)
+# 
+# g_best_shannons_H_89 = ggarrange(plotlist=plots_best_shannons_H_89,nrow=2,ncol=2,
+#                               labels=sprintf("(%s) %s", letters[1:4],names_nice[cases$name]))
+# g_best_total_abundance_89 = ggarrange(plotlist=plots_best_total_abundance_89,nrow=2,ncol=2,
+#                                    labels=sprintf("(%s) %s", letters[1:4],names_nice[cases$name]))
+# g_best_remove_unwanted_89 = ggarrange(plotlist=plots_best_remove_unwanted_89,nrow=2,ncol=2,
+#                                    labels=sprintf("(%s) %s - Species %s", letters[1:4],names_nice[cases$name], species_this=c(18, 10, 9, 6)))
+# ggsave(g_best_shannons_H_89, file='outputs/figures/g_best_shannons_H_89.png',width=20,height=20)
+# ggsave(g_best_total_abundance_89, file='outputs/figures/g_best_total_abundance_89.png',width=20,height=20)
+# ggsave(g_best_remove_unwanted_89, file='outputs/figures/g_best_remove_unwanted_264.png',width=20,height=20)
+# 
+# g_best_shannons_H_264 = ggarrange(plotlist=plots_best_shannons_H_264,nrow=2,ncol=2,
+#                                   labels=sprintf("(%s) %s", letters[1:4],names_nice[cases$name]))
+# g_best_total_abundance_264 = ggarrange(plotlist=plots_best_total_abundance_264,nrow=2,ncol=2,
+#                                        labels=sprintf("(%s) %s", letters[1:4],names_nice[cases$name]))
+# g_best_remove_unwanted_264 = ggarrange(plotlist=plots_best_remove_unwanted_264,nrow=2,ncol=2,
+#                                        labels=sprintf("(%s) %s - Species %s", letters[1:4],names_nice[cases$name], species_this=c(18, 10, 9, 6)))
+# ggsave(g_best_shannons_H_264, file='outputs/figures/g_best_shannons_H_264.png',width=20,height=20)
+# ggsave(g_best_total_abundance_264, file='outputs/figures/g_best_total_abundance_264.png',width=20,height=20)
+# ggsave(g_best_remove_unwanted_264, file='outputs/figures/g_best_remove_unwanted_264.png',width=20,height=20)
+# 
+# 
 
 
 
@@ -1584,22 +1584,43 @@ ggsave(ggarrange(g_best_hexbin_removal_89, g_best_hexbin_removal_264,labels='aut
 
 
 # summarize stats
-df_prioritization_stats_abundance %>% 
-  filter(num_train==89) %>%
+stats_prioritization_1 = df_prioritization_stats_abundance %>% 
+  group_by(num_train, name_nice) %>%
   select(Sensitivity,Specificity) %>%
-  colMeans
+  summarize_all(.funs=c('mean','sd'),na.rm=T) %>%
+  mutate(task='abundance')
 
-df_prioritization_stats_shannons_h %>% 
-  filter(num_train==89) %>%
+stats_prioritization_2 = df_prioritization_stats_shannons_h %>% 
+  group_by(num_train, name_nice) %>%
   select(Sensitivity,Specificity) %>%
-  colMeans
+  summarize_all(.funs=c('mean','sd'),na.rm=T) %>%
+  mutate(task='shannons_h')
 
-df_prioritization_stats_removal %>% 
-  filter(num_train==89) %>%
+stats_prioritization_3 = df_prioritization_stats_removal %>% 
+  group_by(num_train, name_nice) %>%
   select(Sensitivity,Specificity) %>%
-  colMeans(na.rm=T)
+  summarize_all(.funs=c('mean','sd'),na.rm=T) %>%
+  mutate(task='removal')
 
-df_all %>% 
-  filter(num_train==89 & method=='rf' & experimental_design=='mixed') %>% 
-  group_by(name) %>% 
-  summarize(mean(abundance_mae_mean_test_scaled_clipped,na.rm=T))
+stats_prioritization = rbind(stats_prioritization_1, stats_prioritization_2, stats_prioritization_3) %>%
+  select(task,name_nice,num_train,contains("Specificity"),contains("Sensitivity")) %>%
+  mutate(Specificity_mean=format(Specificity_mean,digits=2,scientific=FALSE),
+         Specificity_sd=format(Specificity_sd,digits=2,scientific=FALSE),
+         Sensitivity_mean=format(Sensitivity_mean,digits=2,scientific=FALSE),
+         Sensitivity_sd=format(Sensitivity_sd,digits=2,scientific=FALSE))
+write.csv(stats_prioritization, file='outputs/figures/stats_prioritization.csv',row.names=FALSE)
+
+stats_prediction = df_all %>% 
+  filter(method=='rf' & experimental_design=='mixed') %>% 
+  mutate(name=names_nice[name]) %>% 
+  group_by(name, num_train) %>% 
+  select(abundance_mae_mean_test_scaled_clipped) %>%
+  summarize_all(.funs=c('mean','sd'),na.rm=T) %>%
+  mutate(mean=format(mean,digits=2,scientific=FALSE),sd=format(sd,digits=2,scientific=FALSE))
+write.csv(stats_prediction, file='outputs/figures/stats_prediction_mae.csv', row.names = FALSE)
+
+# write out the main dataframe too
+write.csv(df_all, file='outputs/figures/df_prediction_all.csv', row.names = FALSE)
+write.csv(df_prioritization_stats_abundance, file='outputs/figures/df_prioritization_abundance.csv', row.names = FALSE)
+write.csv(df_prioritization_stats_shannons_h, file='outputs/figures/df_prioritization_shannons_h.csv', row.names = FALSE)
+write.csv(df_prioritization_stats_removal, file='outputs/figures/df_prioritization_removal.csv', row.names = FALSE)
