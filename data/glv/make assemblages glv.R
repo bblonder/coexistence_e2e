@@ -9,14 +9,14 @@ generate_assemblages <- function(n, labels=letters)
   df = expand.grid(replicate(n, 0:1, simplify = FALSE))
   names(df) = labels[1:n]
   
-  x_star = as.data.frame(matrix(data=0,nrow=nrow(df),ncol=ncol(df)))
-  names(x_star) = paste(names(df),"star",sep=".")
+  x_outcome = as.data.frame(matrix(data=0,nrow=nrow(df),ncol=ncol(df)))
+  names(x_outcome) = paste(names(df),"outcome",sep=".")
   
   df_final = data.frame(df, 
                         stable=NA, 
                         feasible=NA,
                         richness=NA,
-                        x_star)
+                        x_outcome)
     
   return(df_final)
 }
@@ -125,27 +125,27 @@ determine_fixed_point <- function(params)
     #   geom_line()
     # ggsave(g,file=sprintf('~/Downloads/test_%f.png',runif(1)))
     
-    x_star =
+    x_outcome =
       simulation %>%
       filter(time == max(time)) %>%
       select(-time) %>%
       as.numeric()
     
-    names(x_star) = paste(names(params$r),"star",sep=".")
+    names(x_outcome) = paste(names(params$r),"outcome",sep=".")
   }
   else
   {
-      x_star = NULL
+      x_outcome = NULL
   }
 
-  return(x_star)
+  return(x_outcome)
 }
 
-determine_feasibility <- function(params, x_star)
+determine_feasibility <- function(params, x_outcome)
 {
   if (length(params$r) > 0)
   {
-    feasibility = all(x_star > 0)
+    feasibility = all(x_outcome > 0)
   }
   else
   {
@@ -155,11 +155,11 @@ determine_feasibility <- function(params, x_star)
   return(feasibility)
 }
 
-determine_stability <- function(params, x_star)
+determine_stability <- function(params, x_outcome)
 {
   if (length(params$r) > 0)
   {
-    Jacobian = diag(x=x_star,nrow=nrow(params$A),ncol=ncol(params$A)) * params$A
+    Jacobian = diag(x=x_outcome,nrow=nrow(params$A),ncol=ncol(params$A)) * params$A
     lambda = eigen(Jacobian)$values
     
     stability = all(Re(lambda) < 0)
@@ -180,35 +180,35 @@ fill_in_assemblages <- function(assemblages, params)
     message(i/nrow(assemblages))
     params_this_row = assign_params(assemblage = assemblages[i,1:n], params = params)
     
-    x_star = determine_fixed_point(params_this_row)
+    x_outcome = determine_fixed_point(params_this_row)
     
-    assemblages[i,"stable"] = determine_stability(params_this_row, x_star=x_star)
-    assemblages[i,"feasible"] = determine_feasibility(params_this_row, x_star=x_star)
+    assemblages[i,"stable"] = determine_stability(params_this_row, x_outcome=x_outcome)
+    assemblages[i,"feasible"] = determine_feasibility(params_this_row, x_outcome=x_outcome)
     
-    if (!is.null(x_star))
+    if (!is.null(x_outcome))
     {
-      assemblages[i,names(x_star)] = x_star
+      assemblages[i,names(x_outcome)] = x_outcome
     }
     
     # set abundance of 0.01 as the minimum threshold to 'count' for richness
-    assemblages[i,"richness"] = sum(x_star > 0.01)
+    assemblages[i,"richness"] = sum(x_outcome > 0.01)
   }
   return(assemblages)
 }
 
 
-
-
-set.seed(1) # replicability
-nsp_glv_16 <- 16
-warning('change # of species back!')
-params_glv_16 = generate_params(n = nsp_glv_16, A.norm.mean = -0.2, r.norm.mean = 1.5)
-assemblages_glv_16 = fill_in_assemblages(params = params_glv_16, assemblages = generate_assemblages(n = nsp_glv_16))
-write.csv(assemblages_glv_16,file='assemblages_glv_16.csv',row.names=FALSE)
-# check counts
-assemblages_glv_16 %>% select(richness, stable) %>% table
-
-
+# 
+# 
+# set.seed(1) # replicability
+# nsp_glv_16 <- 16
+# warning('change # of species back!')
+# params_glv_16 = generate_params(n = nsp_glv_16, A.norm.mean = -0.2, r.norm.mean = 1.5)
+# assemblages_glv_16 = fill_in_assemblages(params = params_glv_16, assemblages = generate_assemblages(n = nsp_glv_16))
+# write.csv(assemblages_glv_16,file='assemblages_glv_16.csv',row.names=FALSE)
+# # check counts
+# assemblages_glv_16 %>% select(richness, stable) %>% table
+# 
+# 
 
 
 
@@ -220,6 +220,9 @@ A_H = c(-0.9118,-0.2145,-0.2718,-0.2275,-0.1294,-0.3058,-0.3478,-0.9002,0.1764,-
 A_H = matrix(A_H, nrow=length(r_H),ncol=length(r_H),dimnames=list(letters[1:length(r_H)],letters[1:length(r_H)]))
 params_H_12 = list(A=A_H,r=r_H)
 assemblages_H_12 = fill_in_assemblages(params = params_H_12, assemblages = generate_assemblages(n = length(r_H)))
+
+names_H = c("BH","CA","BU","PC","BO","BV","BT","EL","FP","CH","DP","ER")
+
 write.csv(assemblages_H_12,file='assemblages_H_12.csv',row.names=FALSE)
 
 
