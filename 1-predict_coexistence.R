@@ -1,10 +1,11 @@
 # Setup output directory
+# setwd("~/Documents/coexistence_love")
 dir.create(file.path(getwd(), 'outputs/figures'), recursive = TRUE)
-dir.create(file.path(getwd(), 'outputs/statistical'), recursive = TRUE)
-directory_string = file.path(getwd(), 'outputs/statistical')
+dir.create(file.path(getwd(), 'outputs/statistical_new'), recursive = TRUE)
+directory_string = file.path(getwd(), 'outputs/statistical_new')
 
 # Load helpers and settings
-DEBUG_MODE = FALSE
+DEBUG_MODE = TRUE
 source('src/configs.R')
 source('src/coexistence_love.R')
 
@@ -13,7 +14,7 @@ source('src/coexistence_love.R')
 
 # Perform analyses
 set.seed(1)
-data_soil_bacteria_8 = read.csv('data/friedman_gore/data_friedman_gore.csv')
+data_soil_bacteria_8 = read.csv('data/soil_bacteria/data_soil_bacteria.csv')
 results = perform_prediction_experiment_full(
   directory_string,
   data_soil_bacteria_8,
@@ -24,7 +25,7 @@ results = perform_prediction_experiment_full(
   num_replicates_in_data = 2) # this is an underestimate but should not cause problems
 
 set.seed(1)
-data_mouse_gut_11 = read.csv('data/human_and_mouse_gut/data_mouse_gut_11.csv')
+data_mouse_gut_11 = read.csv('data/human_and_mouse_gut/data_mouse_gut.csv')
 results = perform_prediction_experiment_full(
   directory_string,
   data_mouse_gut_11,
@@ -35,7 +36,7 @@ results = perform_prediction_experiment_full(
   num_replicates_in_data = 1)
 
 set.seed(1)
-data_human_gut_12 = read.csv('data/human_and_mouse_gut/data_human_gut_12.csv')
+data_human_gut_12 = read.csv('data/human_and_mouse_gut/data_human_gut.csv')
 results = perform_prediction_experiment_full(
   directory_string,
   data_human_gut_12,

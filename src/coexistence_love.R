@@ -1574,13 +1574,13 @@ perform_prediction_experiment_full <- function(
   try(results_df <- rbindlist(results_list[indices_good]))
   if (!is.null(results_df)) {
     write.csv(
-      results_df, file=sprintf('outputs/statistical/results_%s.csv',dataset_name), 
+      results_df, file=sprintf('%s/results_%s.csv', directory_string, dataset_name), 
       row.names=FALSE)
   }
 
   # Save the raw output too in case of a rbind issue for error checking
   saveRDS(results_list, file = sprintf(
-    'outputs/statistical/results_%s.Rdata', dataset_name))
+    '%s/results_%s.Rdata', directory_string, dataset_name))
   
   return(results_list)  
 }
