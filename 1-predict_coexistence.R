@@ -24,10 +24,10 @@ results = perform_prediction_experiment_full(
   num_replicates_in_data = 2) # this is an underestimate but should not cause problems
 
 set.seed(1)
-data_assemblages_M_11 = read.csv('data/glv/assemblages_M_11.csv')
+data_mouse_gut_11 = read.csv('data/human_and_mouse_gut/data_mouse_gut_11.csv')
 results = perform_prediction_experiment_full(
   directory_string,
-  data_assemblages_M_11,
+  data_mouse_gut_11,
   dataset_name = 'mouse_gut',
   num_species = 11,
   method_list = METHODS,
@@ -35,10 +35,10 @@ results = perform_prediction_experiment_full(
   num_replicates_in_data = 1)
 
 set.seed(1)
-data_assemblages_H_12 = read.csv('data/glv/assemblages_H_12.csv')
+data_human_gut_12 = read.csv('data/human_and_mouse_gut/data_human_gut_12.csv')
 results = perform_prediction_experiment_full(
   directory_string,
-  data_assemblages_H_12,
+  data_human_gut_12,
   'human_gut',
   num_species = 12,
   method_list = METHODS,

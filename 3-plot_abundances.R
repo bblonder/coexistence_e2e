@@ -8,7 +8,7 @@ source('utils/quantile_trim.R')
 plot_data <- function(data,name,trim=TRUE)
 {
   # count # of species
-  n_sp = data %>% select(contains("star")) %>% ncol
+  n_sp = data %>% select(contains("outcome")) %>% ncol
   
   # reorder data
   data = data %>% arrange(across(all_of(1:n_sp)))
@@ -26,7 +26,7 @@ plot_data <- function(data,name,trim=TRUE)
     melt(id.vars=c('row'))
   
   data_out = data %>%
-    select(contains("star")) %>%
+    select(contains("outcome")) %>%
     mutate(row=1:nrow(.)) %>%
     melt(id.vars=c('row'))
   

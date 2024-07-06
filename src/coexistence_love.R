@@ -38,7 +38,7 @@ get_named_columns <- function(
   }
   # Return for abundance
   else if (predictor_variable == "_abundance") {
-    return(names(assemblages)[grep("star", names(assemblages))])
+    return(names(assemblages)[grep("outcome", names(assemblages))])
   }
   # Return the feature in assemblage
   else if (predictor_variable %in% names(assemblages)) {
@@ -47,8 +47,8 @@ get_named_columns <- function(
   # Return the feature in assemblage
   else if (predictor_variable == "input") {
     return(names(assemblages)[
-      grep("action", names(assemblages)),
-      grep("environment.initial", names(assemblages))
+      c(grep("action", names(assemblages)),
+      grep("environment.initial", names(assemblages)))
     ])
   }
   # Return error otherwise
@@ -327,10 +327,6 @@ process_data_features <- function(
         return(cut(x, breaks=breaks,right=TRUE,include.lowest=TRUE,labels=bin_means))
       }
       ))
-  }
-  else {
-    print("Error, predictor variable is not valid")
-    return(NULL)
   }
   
   return(assemblages)
@@ -626,7 +622,7 @@ convert_training_row_to_glv_fitting <- function (
   num_species) {
   # Set up the column labeling
   initial_cols = 1:num_species
-  existence_cols = names(assemblages_row)[grep("star", names(assemblages_row))]
+  existence_cols = names(assemblages_row)[grep("outcome", names(assemblages_row))]
   initial_vec = as.numeric(assemblages_row[initial_cols])
   state_vec = as.numeric(assemblages_row[existence_cols])
   
@@ -745,8 +741,7 @@ fit_glv_rf_residual_regressor <- function(
   # Get the residuals from GLV predictions
   diff_columns = paste(
     names(assemblages_training)[1:num_species], ".diff", sep="")
-  star_columns = paste(
-    names(assemblages_training)[1:num_species], ".star", sep="")
+  star_columns = get_named_columns("input", assemblages, method)[1:num_species]
   assemblages_training[diff_columns] = (
     assemblages_training[star_columns] - glv_predictions)
 
@@ -855,14 +850,14 @@ predict_rf_classifier_multivar <- function(
   glv_prior = FALSE) {
   # Get the prediction data
   data_predict = get_assemblages_subset_from_state_idxs(
-    predict_state_idxs, assemblages)[, 1:num_species]
+    predict_state_idxs, assemblages)
+  species_columns = get_named_columns("input", assemblages, method)
   if (glv_prior == TRUE) {
-    data_predict = get_assemblages_subset_from_state_idxs(
-      predict_state_idxs, assemblages)
-    species_columns = names(data_predict)[1:num_species]
     glv_columns = paste(
       names(data_predict)[1:num_species], ".glv", sep="")
     data_predict = data_predict[, c(species_columns, glv_columns)]
+  } else {
+    data_predict = data_predict[, species_columns]
   }
 
   # Predict all values
@@ -1046,7 +1041,7 @@ predict_glv_rf_residual <- function(
   )
   
   # Get the final values by adding and clamping
-  star_columns = paste(names(assemblages)[1:num_species], ".star", sep="")
+  star_columns = paste(names(assemblages)[1:num_species], ".outcome", sep="")
   predictions = predictions_glv + predictions_rf
   # predictions = predictions_glv
   predictions[predictions < 1e-6] = 0
@@ -1092,7 +1087,7 @@ predict_glv_rf_full_info <- function(
   glv_columns = paste(
     names(data_predict)[1:num_species], ".glv", sep="")
   star_columns = paste(
-    names(data_predict)[1:num_species], ".star", sep="")
+    names(data_predict)[1:num_species], ".outcome", sep="")
   data_predict[glv_columns] = glv_predictions
 
   # Predict RF
@@ -1209,17 +1204,12 @@ evaluate_statistics <- function(
 }
 
 clean_input_data <- function(input_file) {
-  # Get the input data and create feasible and stable variable
-  data = input_file %>%
-    mutate(feasible.and.stable = factor(stable & feasible, levels=c(FALSE, TRUE))) %>%
-    select(-feasible, -stable)
-  
   # Flag quantile outliers
-  data = quantile_max_trim(data)
+  data = quantile_max_trim(input_file)
   
   # Remove missing cases that arose from the above
   which_rows_na = data %>% 
-    select(contains("star")) %>% 
+    select(contains("outcome")) %>% 
     rowSums %>%
     is.na %>%
     which
@@ -1335,7 +1325,7 @@ evaluate_initial_final_difference <- function(
   # Get outcomes
   initial_conditions = data_train[, 1:num_species] %>% as.matrix
   final_abundances = data_train %>% 
-    select(contains("star")) %>% as.matrix
+    select(contains("outcome")) %>% as.matrix
   
   # Count # of species that were present but went absent
   num_losses_mean = mean(apply(
@@ -1349,7 +1339,7 @@ evaluate_initial_final_difference <- function(
   
   # Determine the overall dataset 95% abundance quantile
   abundances_dataset_all = assemblages %>% 
-    select(contains("star")) %>% as.matrix %>% as.numeric
+    select(contains("outcome")) %>% as.matrix %>% as.numeric
   abundance_q95_dataset = quantile(abundances_dataset_all, 0.95, na.rm = TRUE)
 
   # Determine overall dataset skewness

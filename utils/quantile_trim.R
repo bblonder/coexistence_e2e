@@ -2,7 +2,7 @@ library(dplyr)
 
 quantile_max_trim <- function(df, q=0.5*1e-2, max_val=1e7, round_zero = TRUE)
 {
-  cols_star = grep("star",names(df))
+  cols_star = grep("outcome",names(df))
   for (i in cols_star)
   {
     df[df[,i] < 1e-10 & df[,i] > -1e-6, i] = 0
@@ -10,13 +10,13 @@ quantile_max_trim <- function(df, q=0.5*1e-2, max_val=1e7, round_zero = TRUE)
   }
   
   quantiles = df %>%
-    select(contains("star")) %>%
+    select(contains("outcome")) %>%
     as.matrix %>%
     as.numeric %>%
     quantile(c(q, 1 - q), na.rm=T)
   
   df_processed = df %>%
-    mutate(across(contains("star"), function(x) { ifelse(x < quantiles[1] | x > quantiles[2], NA, x)}))
+    mutate(across(contains("outcome"), function(x) { ifelse(x < quantiles[1] | x > quantiles[2], NA, x)}))
   
   num_nas_before = sum(is.na(df))
   #print(num_nas_before)

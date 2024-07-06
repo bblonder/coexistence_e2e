@@ -103,7 +103,7 @@ row_counts_trimmed = sapply(fns, function(x) {
   
   data = quantile_max_trim(data)
   counts = data %>% 
-    select(contains("star")) %>%
+    select(contains("outcome")) %>%
     na.omit %>%
     nrow
   return(counts)
@@ -114,7 +114,7 @@ num_species = sapply(fns, function(x) {
   data = read.csv(x)
   
   n_sp = data %>% 
-    select(contains("star")) %>% 
+    select(contains("outcome")) %>% 
     ncol
   return(n_sp)
 })
@@ -123,7 +123,7 @@ num_combos = sapply(fns, function(x) {
   data = read.csv(x)
   
   n_sp = data %>% 
-    select(contains("star")) %>% 
+    select(contains("outcome")) %>% 
     ncol
   
   num_combos = data %>%
@@ -138,7 +138,7 @@ abundance_q95 = sapply(fns, function(x) {
   data = read.csv(x)
   
   q_95 = data %>% 
-    select(contains("star")) %>% 
+    select(contains("outcome")) %>% 
     as.matrix %>%
     as.numeric %>%
     quantile(0.95,na.rm=T) %>%
@@ -571,7 +571,7 @@ predictions_best <- function(type, datasets_preds, quantile_cutoff, fn_assemblag
   assemblages = read.csv(fn_assemblages)
   
   outcome_abundances_ALL = assemblages %>%
-    select(contains("star"))
+    select(contains("outcome"))
   outcome_abundances_ALL = quantile_max_trim(outcome_abundances_ALL)
   num_species = ncol(outcome_abundances_ALL)
   
@@ -695,7 +695,7 @@ predictions_best <- function(type, datasets_preds, quantile_cutoff, fn_assemblag
 
 check_removal <- function(datasets_preds, dataset_name_this)
 {
-  num_species_this = read.csv(cases$fn_assemblages[cases$name==dataset_name_this]) %>% select(contains("star")) %>% ncol
+  num_species_this = read.csv(cases$fn_assemblages[cases$name==dataset_name_this]) %>% select(contains("outcome")) %>% ncol
   cat(dataset_name_this)
   stats_unwanted_this = lapply(1:num_species_this, function(id_unwanted_this) {
     cat('.')
@@ -1028,7 +1028,7 @@ ggsave(g_specificity_models_visreg, file='outputs/figures/g_specificity_models_v
 #   cat("*")
 #   
 #   experiments_all = read.csv(fn_assemblages) 
-#   num_species = ncol(experiments_all %>% select(contains("star")))
+#   num_species = ncol(experiments_all %>% select(contains("outcome")))
 #   experiments_all = experiments_all[,1:num_species]
 #   ids_experiments_all = apply(experiments_all, 1, paste, collapse="*")
 #   
