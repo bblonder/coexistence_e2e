@@ -24,7 +24,7 @@ source('utils/log_seq.R')
 source('utils/quantile_trim.R')
 
 
-get_predictor_columns <- function(
+get_named_columns <- function(
   predictor_variable,
   assemblages,
   method) {
@@ -36,13 +36,20 @@ get_predictor_columns <- function(
   if (predictor_variable == "_glv") {
     return(names(assemblages)[grep("glv", names(assemblages))])
   }
-  # Return for composition and abundance
-  else if (predictor_variable %in% c("_composition","_abundance")) {
+  # Return for abundance
+  else if (predictor_variable == "_abundance") {
     return(names(assemblages)[grep("star", names(assemblages))])
   }
   # Return the feature in assemblage
   else if (predictor_variable %in% names(assemblages)) {
     return(predictor_variable)
+  }
+  # Return the feature in assemblage
+  else if (predictor_variable == "input") {
+    return(names(assemblages)[
+      grep("action", names(assemblages)),
+      grep("environment.initial", names(assemblages))
+    ])
   }
   # Return error otherwise
   else {
@@ -64,6 +71,13 @@ convert_state_idx_to_vec <- function(
   return(as.integer(intToBits(state_index))[1:num_species])
 }
 
+convert_state_idx_to_vec_env <- function(
+  num_species,
+  state_index,
+  env_index) {
+  return(c(convert_state_idx_to_vec(num_species, state_index), env_index))
+}
+
 convert_vec_to_state_idx <- function(
   num_species,
   state_vec) {
@@ -78,6 +92,16 @@ convert_vec_to_state_idx <- function(
   }
 
   return(state_idx)
+}
+
+convert_vec_to_state_idx_env <- function(
+  num_species,
+  state_vec) {
+  return(
+    c(
+      convert_vec_to_state_idx(num_species, state_vec[1:num_species]), 
+      state_vec[num_species+1])
+  )
 }
 
 get_single_species_and_leave_one_out_state_idxs <- function(
@@ -278,18 +302,10 @@ process_data_features <- function(
   assemblages, 
   method,
   hyperparams = MODEL_HYPERPARAMS) {
-  # Get columns for composition and abundance
-  predictor_columns = get_predictor_columns(predictor_variable, assemblages, method)
+  # Get columns for abundance
+  predictor_columns = get_named_columns(predictor_variable, assemblages, method)
 
-  if (predictor_variable=="_composition") {
-    # convert to presence/absence data - binary output
-    assemblages[,predictor_columns] = (assemblages[,predictor_columns] > 0)
-    for (col in predictor_columns) {
-      assemblages[,col] = factor(assemblages[,col], levels = c(FALSE, TRUE))
-    }
-  }
-
-  else if (predictor_variable=="_abundance") {
+  if (predictor_variable=="_abundance") {
     # If we have abundance, convert the abundances to bins
     # assume ten total classes
     numeric_values = assemblages[,predictor_columns] %>% as.matrix %>% as.numeric
@@ -312,53 +328,12 @@ process_data_features <- function(
       }
       ))
   }
+  else {
+    print("Error, predictor variable is not valid")
+    return(NULL)
+  }
   
   return(assemblages)
-}
-
-fit_rf_classifier_singlevar <- function(
-  predictor_variable,
-  assemblages,
-  training_state_idxs,
-  method,
-  num_species,
-  glv_prior = FALSE) {
-  # Get the training data
-  data_training = get_assemblages_subset_from_state_idxs(
-    training_state_idxs, assemblages)
-
-  # Get columns for composition and abundance
-  species_columns = names(data_training)[1:num_species]
-  dependent_variables = paste(species_columns, collapse="+")
-  if (glv_prior == TRUE) {
-    glv_columns = paste(
-      names(data_training)[1:num_species], ".glv", sep="")
-    dependent_variables = paste(c(species_columns, glv_columns), collapse="+")
-  }
-
-  # Get the RF formula for fitting
-  formula_rf_model = formula(sprintf(
-    "%s~%s",
-    predictor_variable,
-    dependent_variables
-  ))
-
-  # Get the case weights
-  case_weights = freq_weight(as.numeric(data_training[,predictor_variable]))
-  
-  # Generate RF model
-  rf_model = ranger(
-    data = data_training,
-    formula = formula_rf_model,
-    importance = 'permutation',
-    case.weights = case_weights,
-    verbose = TRUE,
-    num.trees = 500,
-    mtry = ceiling(sqrt(num_species)),
-    min.node.size = ceiling(sqrt(num_species))
-  )
-
-  return(rf_model)
 }
 
 fit_rf_classifier_multivar <- function(
@@ -372,9 +347,9 @@ fit_rf_classifier_multivar <- function(
   data_training = get_assemblages_subset_from_state_idxs(
     training_state_idxs, assemblages)
 
-  # Get columns for composition and abundance
-  predictor_columns = get_predictor_columns(predictor_variable, assemblages, method)
-  species_columns = names(data_training)[1:num_species]
+  # Get columns for abundance
+  predictor_columns = get_named_columns(predictor_variable, assemblages, method)
+  species_columns = get_named_columns("input", assemblages, method)
   dependent_variables = paste(species_columns, collapse="+")
   if (glv_prior == TRUE) {
     glv_columns = paste(
@@ -414,17 +389,14 @@ fit_rf_classifier <- function(
   method,
   num_species,
   glv_prior = FALSE) {
-  # Determine single vs. multi variable output
-  is_single_var = !(predictor_variable %in% c("_abundance", "_composition"))
-
-  # Pipeline for getting single vs. multi variable RF
-  if (is_single_var) {
-    return(fit_rf_classifier_singlevar(
+  # Pipeline for getting abundance only
+  if (predictor_variable == "_abundance") {
+    return(fit_rf_classifier_multivar(
       predictor_variable, assemblages, training_state_idxs, method, num_species, glv_prior))
   }
   else {
-    return(fit_rf_classifier_multivar(
-      predictor_variable, assemblages, training_state_idxs, method, num_species, glv_prior))
+    print("Error, predictor variable is not valid")
+    return(NULL)
   }
 }
 
@@ -726,7 +698,7 @@ fit_rf_regressor <- function(
     training_state_idxs, assemblages)
 
   # Get columns for abundance
-  predictor_columns = get_predictor_columns("_residual", assemblages, method)
+  predictor_columns = get_named_columns("_residual", assemblages, method)
 
   # Get the RF formula for fitting
   formula_rf_model = formula(sprintf(
@@ -874,26 +846,6 @@ fit_model <- function(
   }
 }
 
-predict_rf_classifier_singlevar <- function(
-  predictor_variable,
-  rf_model,
-  assemblages,
-  predict_state_idxs,
-  num_species,
-  glv_prior = FALSE) {
-  # Get the prediction data
-  data_predict = get_assemblages_subset_from_state_idxs(
-    predict_state_idxs, assemblages)
-
-  # Predict all values
-  values_predicted = predict(
-    rf_model, 
-    data_predict
-  )$predictions
-  
-  return(data.frame("pred"=values_predicted))
-}
-
 predict_rf_classifier_multivar <- function(
   predictor_variable,
   rf_model,
@@ -919,14 +871,7 @@ predict_rf_classifier_multivar <- function(
     newdata = data_predict
   )
   # Process the predicted values
-  if (predictor_variable == "_composition") {
-    values_predicted = as.data.frame(sapply(
-      values_predicted_raw$classOutput, 
-      function(x) {as.logical(x$class)}, 
-      simplify = FALSE
-    ))
-  }
-  else if (predictor_variable == "_abundance") {
+  if (predictor_variable == "_abundance") {
     # convert the class predictions back to numeric values
     values_predicted = as.data.frame(sapply(
       values_predicted_raw$classOutput, 
@@ -950,52 +895,15 @@ predict_rf_classifier <- function(
   predict_state_idxs,
   num_species,
   glv_prior = FALSE) {
-  # Determine single vs. multi variable output
-  is_single_var = !(predictor_variable %in% c("_abundance", "_composition"))
-
   # Pipeline for getting single vs. multi variable RF
-  if (is_single_var) {
-    return(predict_rf_classifier_singlevar(
-      predictor_variable, rf_model, assemblages, predict_state_idxs, num_species, glv_prior))
-  }
-  else {
+  if (predictor_variable == "_abundance") {
     return(predict_rf_classifier_multivar(
       predictor_variable, rf_model, assemblages, predict_state_idxs, num_species, glv_prior))
   }
-}
-
-predict_naive_singlevar <- function(
-  predictor_variable,
-  assemblages,
-  predict_state_idxs,
-  num_species) {
-  # Get the prediction data
-  data_predict = get_assemblages_subset_from_state_idxs(
-    predict_state_idxs, assemblages)
-
-  # Predict all values
-  if (is.factor(data_predict[, predictor_variable])) {
-    # Randomly sample values of the factor from the training data
-    values_predicted = sample(
-      x = assemblages[,predictor_variable], 
-      size = nrow(data_predict),
-      replace = TRUE
-    )
-  }
   else {
-    # Assume all species coexist
-    if (predictor_variable == "richness") {
-      # Use training data richness
-      values_predicted = apply(
-        data_predict[, 1:num_species], 1, sum)
-    }
-    # Pick mean value of the continuous variable
-    else {
-      values_predicted = mean(data_predict[, predictor_variable])
-    }
+    print("Error, predictor variable is not valid")
+    return(NULL)
   }
-  
-  return(values_predicted)
 }
 
 predict_naive_multivar <- function(
@@ -1008,15 +916,11 @@ predict_naive_multivar <- function(
   data_predict = get_assemblages_subset_from_state_idxs(
     predict_state_idxs, assemblages)
 
-  # Get columns for composition and abundance
-  predictor_columns = get_predictor_columns(predictor_variable, assemblages, method)
+  # Get columns for abundance
+  predictor_columns = get_named_columns(predictor_variable, assemblages, method)
 
-  # If composition use the input presence/absences
-  if (predictor_variable == "_composition") {
-    values_predicted = (data_predict[, 1:num_species] > 0)
-  }
   # If abundance use the mean training values masked by the input presence/absences
-  else if (predictor_variable == "_abundance") {
+  if (predictor_variable == "_abundance") {
     values_predicted = (data_predict[, 1:num_species] * 
       colMeans(data_predict[, predictor_columns]))
   }
@@ -1034,17 +938,14 @@ predict_naive <- function(
   predict_state_idxs,
   method,
   num_species) {
-  # Determine single vs. multi variable output
-  is_single_var = !(predictor_variable %in% c("_abundance", "_composition"))
-
   # Pipeline for getting single vs. multi variable RF
-  if (is_single_var) {
-    return(predict_naive_singlevar(
-      predictor_variable, assemblages, predict_state_idxs, num_species))
-  }
-  else {
+  if (predictor_variable == "_abundance") {
     return(predict_naive_multivar(
       predictor_variable, assemblages, predict_state_idxs, method, num_species))
+  }
+  else {
+    print("Error, predictor variable is not valid")
+    return(NULL)
   }
 }
 
@@ -1102,16 +1003,9 @@ predict_glv <- function(
     )
   )
 
-  # If composition use the input presence/absences
-  if (predictor_variable == "_composition") {
-    values_predicted = (glv_predictions > 0)
-  }
   # If abundance use the mean training values masked by the input presence/absences
-  else if (predictor_variable == "_abundance") {
+  if (predictor_variable == "_abundance") {
     values_predicted = glv_predictions
-  }
-  else if (predictor_variable == "richness") {
-    values_predicted = rowSums(glv_predictions > 0)
   }
   else {
     print(paste("Error, predictor variable is not valid:", predictor_variable))
@@ -1158,12 +1052,8 @@ predict_glv_rf_residual <- function(
   predictions[predictions < 1e-6] = 0
   colnames(predictions) = star_columns
 
-  # If composition use the input presence/absences
-  if (predictor_variable == "_composition") {
-    values_predicted = (predictions > 0)
-  }
   # If abundance use the mean training values masked by the input presence/absences
-  else if (predictor_variable == "_abundance") {
+  if (predictor_variable == "_abundance") {
     values_predicted = predictions
   }
   else if (predictor_variable == "richness") {
@@ -1261,14 +1151,11 @@ get_ground_truth_values <- function(
   data_predict = get_assemblages_subset_from_state_idxs(
     predict_state_idxs, assemblages)
 
-  # Get columns for composition and abundance
-  predictor_columns = get_predictor_columns(predictor_variable, assemblages, method)
+  # Get columns for abundance
+  predictor_columns = get_named_columns(predictor_variable, assemblages, method)
   
   # Process the ground truth values
-  if (predictor_variable == "_composition") {
-    values_ground_truth = (data_predict[, 1:num_species] > 0)
-  }
-  else if (predictor_variable %in% c("_abundance", "richness")) {
+  if (predictor_variable %in% c("_abundance")) {
     values_ground_truth = data_predict[, predictor_columns]
   }
   else {
@@ -1277,34 +1164,6 @@ get_ground_truth_values <- function(
   }
 
   return(values_ground_truth)
-}
-
-evaluate_balanced_accuracy_singlevar <- function(
-  confusion_matrix) {
-  # Directly use confusion matrix to evaluate balanced accuracy for single var
-  return(confusion_matrix$byClass["Balanced Accuracy"])
-}
-
-evaluate_balanced_accuracy_multivar <- function(
-  values_predicted,
-  values_ground_truth) {
-  # Get balanced accuracy with casewise mean
-  balanced_accuracy = NA
-  try(balanced_accuracy <- balanced_accuracy_casewise_mean(
-    pred = values_predicted, 
-    obs = values_ground_truth)
-  )
-
-  return(balanced_accuracy)
-}
-
-evaluate_mean_absolute_error_singlevar <- function(
-  values_predicted,
-  values_ground_truth) {
-  return(mean_absolute_error(
-    pred = as.numeric(unlist(values_predicted)), 
-    obs = values_ground_truth
-  ))
 }
 
 evaluate_mean_absolute_error_multivar <- function(
@@ -1339,38 +1198,8 @@ evaluate_statistics <- function(
   balanced_accuracy = NA
   confusion_matrix = NA
 
-  # Determine variable settings
-  is_single_var = !(predictor_variable %in% c("_abundance", "_composition"))
-  is_factor = FALSE
-  if (is_single_var && 
-    (is.factor(assemblages[,predictor_variable]) || 
-      is.logical(assemblages[,predictor_variable]))
-  ) {
-    is_factor = TRUE
-  }
-
-  # Calculate all applicable statistics
-  if (is_single_var) {
-    if (is_factor) {
-      confusion_matrix = evaluate_confusion_matrix(
-        values_predicted, values_ground_truth)
-      balanced_accuracy = evaluate_balanced_accuracy_singlevar(confusion_matrix)
-    }
-    else {
-      mean_absolute_error = evaluate_mean_absolute_error_singlevar(
-        values_predicted, values_ground_truth)
-    }
-  }
-  else {
-    if (predictor_variable == "_composition") {
-      balanced_accuracy = evaluate_balanced_accuracy_multivar(
-        values_predicted, values_ground_truth)
-    }
-    else {
-      mean_absolute_error = evaluate_mean_absolute_error_multivar(
-        values_predicted, values_ground_truth)
-    }
-  }
+  mean_absolute_error = evaluate_mean_absolute_error_multivar(
+    values_predicted, values_ground_truth)
 
   return(list(
     mean_absolute_error = mean_absolute_error,
@@ -1597,8 +1426,8 @@ perform_prediction_experiment_parallel_wrapper <- function(
     index, method, replicate_index, num_train, 
     experimental_design, "abundance", "experiment_test")
   
-  # Perform experiments for abundance, composition, richness
-  for (response in c("_abundance", "_composition", "richness")) {
+  # Perform experiments for abundance
+  for (response in c("_abundance")) {
     response_save = gsub("_", "", response, fixed = TRUE)
     experiment_result = perform_prediction_experiment_single(
       response, assemblages, num_train, 
@@ -1615,14 +1444,6 @@ perform_prediction_experiment_parallel_wrapper <- function(
     if (response == "_abundance") {
       results_table$abundance_mae_mean_train[index] = experiment_result$mae_train
       results_table$abundance_mae_mean_test[index] = experiment_result$mae_test
-    }
-    else if (response == "_composition") {
-      results_table$composition_balanced_accuracy_mean_train[index] = experiment_result$ba_train
-      results_table$composition_balanced_accuracy_mean_test[index] = experiment_result$ba_test
-    }
-    else if (response == "richness") {
-      results_table$richness_mae_train[index] = experiment_result$mae_train
-      results_table$richness_mae_test[index] = experiment_result$mae_test
     }
     # print("====================")
     # print(response)
