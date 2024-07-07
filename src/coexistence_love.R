@@ -48,7 +48,7 @@ get_named_columns <- function(
   else if (predictor_variable == "input") {
     return(names(assemblages)[
       c(grep("action", names(assemblages)),
-      grep("environment.initial", names(assemblages)))
+      grep("initial", names(assemblages)))
     ])
   }
   # Return error otherwise

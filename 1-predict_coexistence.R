@@ -1,5 +1,5 @@
 # Setup output directory
-# setwd("~/Documents/coexistence_love")
+setwd("~/Documents/coexistence_love")
 dir.create(file.path(getwd(), 'outputs/figures'), recursive = TRUE)
 dir.create(file.path(getwd(), 'outputs/statistical_new'), recursive = TRUE)
 directory_string = file.path(getwd(), 'outputs/statistical_new')
@@ -47,12 +47,12 @@ results = perform_prediction_experiment_full(
   num_replicates_in_data = 1)
 
 set.seed(1)
-data_sortie_9_3 = read.csv('data/sortie/data_sortie.csv')
+data_ciliates = read.csv('data/ciliates/data_ciliates.csv')
 results = perform_prediction_experiment_full(
   directory_string,
-  data_sortie_9_3,
-  dataset_name = 'sortie-nd_plants',
-  num_species = 9,
+  data_ciliates,
+  dataset_name = 'ciliates',
+  num_species = 6,
   method_list = METHODS,
   experimental_design_list = EXPERIMENTAL_DESIGNS,
   num_replicates_in_data = 3)
