@@ -1,0 +1,5 @@
+"Bar.action","undLac.action","uncLac.action","Oth.action","Bla.action","undMol.action","Akk.action","Cop.action","Clodif.action","Ent.action","undEnt.action","environment.initial","Bar.outcome","undLac.outcome","uncLac.outcome","Oth.outcome","Bla.outcome","undMol.outcome","Akk.outcome","Cop.outcome","Clodif.outcome","Ent.outcome","undEnt.outcome","state_idx"
+1,0,1,0,1,1,1,1,1,0,0,0,0,0,0,0,0,2.13115877519994,0,0,13.320395414246,0,0,501
+0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,2.675179436551,0,0,19.0978977786287,2.09081460288819,0,992
+0,1,0,0,0,0,1,1,0,0,1,0,0,2.95766993993708,0,0,0,0,0,0,0,0,0,1218
+1,1,0,1,0,1,0,0,0,1,1,0,1.83325263036388,3.9396383242927,0,0,0,1.52854538496677,0,0,0,1.56524644890271,0,1579
