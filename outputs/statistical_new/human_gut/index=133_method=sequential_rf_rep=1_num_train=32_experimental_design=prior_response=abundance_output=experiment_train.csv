@@ -1,0 +1,5 @@
+"BH.action","CA.action","BU.action","PC.action","BO.action","BV.action","BT.action","EL.action","FP.action","CH.action","DP.action","ER.action","environment.initial","BH.outcome","CA.outcome","BU.outcome","PC.outcome","BO.outcome","BV.outcome","BT.outcome","EL.outcome","FP.outcome","CH.outcome","DP.outcome","ER.outcome","state_idx"
+0,1,0,0,0,0,0,0,0,0,0,0,0,0,0.650906117999729,0,0,0,0,0,0,0,0,0,0,2
+0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0.345527057690986,0,0,0,0,0,64
+0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0.21113465613562,0,1024
+1,1,1,1,1,1,1,1,1,0,1,1,0,0.754208561399589,0,0,0.0556355403461853,0.467051221025485,0,0.152635602453371,0,0.546776674598581,0,0,0,3583
