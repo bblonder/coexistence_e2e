@@ -19,7 +19,7 @@ MODEL_HYPERPARAMS = list(
 
 # Debugging override
 if (DEBUG_MODE == TRUE) {
-  CORES = 4
+  CORES = 1
   REPLICATES = 2
   GRID_POINTS = 5
   MIN_POINTS = 1e1
