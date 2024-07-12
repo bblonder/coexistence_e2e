@@ -4,7 +4,7 @@ try(dir.create(file.path(getwd(), 'outputs/statistical'), recursive = TRUE))
 directory_string = file.path(getwd(), 'outputs/statistical')
 
 # Load helpers and settings
-DEBUG_MODE = FALSE
+DEBUG_MODE = TRUE
 source('src/configs.R')
 source('src/coexistence_love.R')
 
@@ -85,13 +85,12 @@ data_grassland_annual_plants = read.csv('data/grassland_annual_plants/data_grass
 if (DEBUG_MODE==TRUE) {
   data_grassland_annual_plants = data_grassland_annual_plants %>% sample_n(2^14)
 }
-METHODS = setdiff(METHODS, 'sequential_rf') # no sequential RF due to large parameter space
 results = perform_prediction_experiment_full(
   directory_string,
   data_grassland_annual_plants,
   dataset_name = 'grassland_annual_plants',
   num_species = 18,
-  method_list = METHODS,
+  method_list = setdiff(METHODS, 'sequential_rf'), # no sequential RF due to large parameter space
   experimental_design_list = EXPERIMENTAL_DESIGNS,
   num_replicates_in_data = 1)
 
@@ -112,7 +111,8 @@ results = perform_prediction_experiment_full(
   num_replicates_in_data = 3)
 
 set.seed(1)
-data_grassland_annual_plants_drought = read.csv('data/grassland_annual_plants_drought/data_grassland_annual_plants_drought.csv')
+data_grassland_annual_plants_drought = read.csv('data/grassland_annual_plants_drought/data_grassland_annual_plants_drought.csv') %>%
+  mutate(treatment.initial = factor(treatment.initial))
 results = perform_prediction_experiment_full(
   directory_string,
   data_grassland_annual_plants_drought,
@@ -124,12 +124,15 @@ results = perform_prediction_experiment_full(
 
 
 set.seed(1)
-data_fruit_flies = read.csv('data/fruit_flies/data_fruit_flies.csv')
+data_fruit_flies = read.csv('data/fruit_flies/data_fruit_flies.csv') %>%
+  mutate(food.initial = factor(food.initial)) %>%
+  mutate(temperature.initial = factor(temperature.initial))
+NUM_TEST = 100
 results = perform_prediction_experiment_full(
   directory_string,
   data_fruit_flies,
   dataset_name = 'fruit_flies',
   num_species = 28,
-  method_list = METHODS,
+  method_list = c('rf','naive'),
   experimental_design_list = EXPERIMENTAL_DESIGNS,
-  num_replicates_in_data = 1) # this one has two environments
+  num_replicates_in_data = 1)

@@ -64,6 +64,7 @@ convert_state_idx_to_vec <- function(
   if (num_species > 32) {
     stop("Number of species too large")
   }
+  print(state_index)
 
   # Convert state_index binary mapping to rows with the state
   # state_index is 0-indexed
@@ -161,7 +162,6 @@ generate_state_idxs_train <- function(
     return(NULL)
   }
     
-  
   # Extract the full states and the states that actually exist
   full_states = get_full_state_grid(num_species)
   existing_state_idxs = unique(assemblages[,'state_idx'])
@@ -1212,9 +1212,14 @@ clean_input_data <- function(input_file) {
     rowSums %>%
     is.na %>%
     which
+  
+  # we need this in case the quantile trim did not delete anything
+  if (length(which_rows_na)>0)
+  {
+    data = data[-which_rows_na,]
+  }
   print(sprintf("Removed %d problematic case rows",length(which_rows_na)))
-  data = data[-which_rows_na,]
-
+  
   return(data)
 }
 

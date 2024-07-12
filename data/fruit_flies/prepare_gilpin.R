@@ -57,7 +57,7 @@ multispecies = read.csv('table_2.5.csv') %>%
 species_all = names(pairwise_a) # pull from the most complete name list
 
 df_empty = data.frame(matrix(data=0, nrow=1, ncol=length(species_all)+2+length(species_all)))
-colnames(df_empty) = c(paste(species_all,"action",sep="."),'food.initial','temperature.initial',paste(species_all,"star",sep="."))
+colnames(df_empty) = c(paste(species_all,"action",sep="."),'food.initial','temperature.initial',paste(species_all,"outcome",sep="."))
 
 # make final data frame
 result = NULL
@@ -77,18 +77,18 @@ for (i in 1:nrow(pairwise_long_all))
 
   if (outcome_this == "*")
   {
-    df_this[1,paste(sp1_this,"star",sep=".")] = 0.5 # scale this as a relative abundance, assume equal population sizes (no data available to predict more quantitatively)
-    df_this[1,paste(sp2_this,"star",sep=".")] = 0.5 
+    df_this[1,paste(sp1_this,"outcome",sep=".")] = 0.5 # scale this as a relative abundance, assume equal population sizes (no data available to predict more quantitatively)
+    df_this[1,paste(sp2_this,"outcome",sep=".")] = 0.5 
   }
   else if (outcome_this == "1")
   {
-    df_this[1,paste(sp1_this,"star",sep=".")] = 1
-    df_this[1,paste(sp2_this,"star",sep=".")] = 0   
+    df_this[1,paste(sp1_this,"outcome",sep=".")] = 1
+    df_this[1,paste(sp2_this,"outcome",sep=".")] = 0   
   }
   else if (outcome_this == "0")
   {
-    df_this[1,paste(sp1_this,"star",sep=".")] = 0
-    df_this[1,paste(sp2_this,"star",sep=".")] = 1   
+    df_this[1,paste(sp1_this,"outcome",sep=".")] = 0
+    df_this[1,paste(sp2_this,"outcome",sep=".")] = 1   
   }
   else
   {
@@ -116,7 +116,7 @@ for (i in 1:nrow(multispecies))
   for (name_this in names_multispecies)
   {
     df_this[1, paste(name_this,"action",sep=".")] = multispecies[i,name_this] / 100 # scale as relative abundnace
-    df_this[1, paste(name_this,"star",sep=".")] = multispecies[i,paste(name_this,"outcome",sep=".")] / 100 # this scales to relative abundance
+    df_this[1, paste(name_this,"outcome",sep=".")] = multispecies[i,paste(name_this,"outcome",sep=".")] / 100 # this scales to relative abundance
   }
   
   df_this[1,"food.initial"] = multispecies[i,"food"]
