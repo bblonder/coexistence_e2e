@@ -4,7 +4,7 @@ try(dir.create(file.path(getwd(), 'outputs/statistical'), recursive = TRUE))
 directory_string = file.path(getwd(), 'outputs/statistical')
 
 # Load helpers and settings
-DEBUG_MODE = TRUE
+DEBUG_MODE = FALSE
 source('src/configs.R')
 source('src/coexistence_love.R')
 
@@ -12,6 +12,57 @@ source('src/coexistence_love.R')
 # CORES <- as.numeric(Sys.getenv('SLURM_CPUS_ON_NODE'))
 
 # Perform analyses
+
+
+
+### MULTIPLE ENVIRONMENTS
+
+set.seed(1)
+data_ciliates = read.csv('data/ciliates/data_ciliates.csv')
+results = perform_prediction_experiment_full(
+  directory_string,
+  data_ciliates,
+  dataset_name = 'ciliates',
+  num_species = 6,
+  method_list = METHODS,
+  experimental_design_list = EXPERIMENTAL_DESIGNS,
+  num_replicates_in_data = 3)
+
+set.seed(1)
+data_grassland_annual_plants_drought = read.csv('data/grassland_annual_plants_drought/data_grassland_annual_plants_drought.csv') %>%
+  mutate(treatment.initial = factor(treatment.initial))
+results = perform_prediction_experiment_full(
+  directory_string,
+  data_grassland_annual_plants_drought,
+  dataset_name = 'grassland_annual_plants_drought',
+  num_species = 6,
+  method_list = METHODS,
+  experimental_design_list = EXPERIMENTAL_DESIGNS,
+  num_replicates_in_data = 1)
+
+
+set.seed(1)
+data_fruit_flies = read.csv('data/fruit_flies/data_fruit_flies.csv') %>%
+  mutate(food.initial = factor(food.initial)) %>%
+  mutate(temperature.initial = factor(temperature.initial))
+
+data_fruit_flies[,1:28] = round(data_fruit_flies[,1:28]>0) # convert initial abundances to presence/absence
+
+
+results = perform_prediction_experiment_full(
+  directory_string,
+  data_fruit_flies,
+  dataset_name = 'fruit_flies',
+  num_species = 28, # should be 28
+  method_list = c('rf','sequential_rf','naive'),
+  experimental_design_list = EXPERIMENTAL_DESIGNS,
+  num_replicates_in_data = 30) # this is maximum # of replicates, reflects the last 30 rows of the data file where there are varying abundances (which are ignored by this code run)
+
+
+
+
+# SINGLE ENVIRONMENTS
+
 set.seed(1)
 data_soil_bacteria = read.csv('data/soil_bacteria/data_soil_bacteria.csv')
 results = perform_prediction_experiment_full(
@@ -97,42 +148,17 @@ results = perform_prediction_experiment_full(
 
 
 
-### MULTIPLE ENVIRONMENTS
-
-set.seed(1)
-data_ciliates = read.csv('data/ciliates/data_ciliates.csv')
-results = perform_prediction_experiment_full(
-  directory_string,
-  data_ciliates,
-  dataset_name = 'ciliates',
-  num_species = 6,
-  method_list = METHODS,
-  experimental_design_list = EXPERIMENTAL_DESIGNS,
-  num_replicates_in_data = 3)
-
-set.seed(1)
-data_grassland_annual_plants_drought = read.csv('data/grassland_annual_plants_drought/data_grassland_annual_plants_drought.csv') %>%
-  mutate(treatment.initial = factor(treatment.initial))
-results = perform_prediction_experiment_full(
-  directory_string,
-  data_grassland_annual_plants_drought,
-  dataset_name = 'grassland_annual_plants_drought',
-  num_species = 6,
-  method_list = METHODS,
-  experimental_design_list = EXPERIMENTAL_DESIGNS,
-  num_replicates_in_data = 1)
 
 
-set.seed(1)
-data_fruit_flies = read.csv('data/fruit_flies/data_fruit_flies.csv') %>%
-  mutate(food.initial = factor(food.initial)) %>%
-  mutate(temperature.initial = factor(temperature.initial))
-NUM_TEST = 100
-results = perform_prediction_experiment_full(
-  directory_string,
-  data_fruit_flies,
-  dataset_name = 'fruit_flies',
-  num_species = 28,
-  method_list = c('rf','naive'),
-  experimental_design_list = EXPERIMENTAL_DESIGNS,
-  num_replicates_in_data = 1)
+# %>%
+#   select(contains(c("Quad","Rob","Bir","Pallid","PerO","Imm","Gau","food.initial","temperature.initial"))) %>%
+#   select(contains("action"),contains("initial"),contains("outcome"))
+
+
+# data_fruit_flies = data_fruit_flies %>%
+#   mutate(conditions = .[,1:9] %>% apply(1,paste,collapse=".")) %>%
+#   group_by(conditions) %>%
+#   slice_head(n=1) %>%
+#   ungroup %>%
+#   select(-conditions) %>%
+#   as.data.frame #

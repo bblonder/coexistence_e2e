@@ -11,6 +11,7 @@ library(e1071)
 library(vegan)
 library(RANN)
 library(conflicted)
+library(pbapply)
 conflict_prefer("union", "base")
 conflict_prefer("intersect", "base")
 conflict_prefer("select", "dplyr")
@@ -64,7 +65,6 @@ convert_state_idx_to_vec <- function(
   if (num_species > 32) {
     stop("Number of species too large")
   }
-  print(state_index)
 
   # Convert state_index binary mapping to rows with the state
   # state_index is 0-indexed
@@ -118,9 +118,10 @@ get_full_state_grid <- function(
   # Generate all states 
   full_states = do.call(
     rbind, 
-    lapply(
-      1:2^num_species, 
-      function(x) convert_state_idx_to_vec(num_species, x)
+    pblapply(
+      X=1:2^num_species, 
+      FUN=function(x) convert_state_idx_to_vec(num_species, x),
+      cl=CORES
     )
   )
   return(full_states)
@@ -140,6 +141,7 @@ get_state_assemblages_mapping <- function(
 }
 
 generate_state_idxs_train <- function(
+  full_states,
   experimental_design,
   num_train,
   assemblages,
@@ -163,8 +165,7 @@ generate_state_idxs_train <- function(
   }
     
   # Extract the full states and the states that actually exist
-  full_states = get_full_state_grid(num_species)
-  existing_state_idxs = unique(assemblages[,'state_idx'])
+  existing_state_idxs = unique(assemblages[,'state_idx',drop=TRUE])
   
   # Biased knowledge sampling from SP & LOO
   if (experimental_design == "prior") {
@@ -1366,6 +1367,7 @@ perform_prediction_experiment_parallel_wrapper <- function(
   dataset_name,
   num_species,
   num_replicates_in_data,
+  full_states,
   index,
   assemblages,
   results_table) {
@@ -1391,7 +1393,7 @@ perform_prediction_experiment_parallel_wrapper <- function(
 
   # Get training & testing set
   state_idxs_train = generate_state_idxs_train( 
-    experimental_design, num_train, assemblages, method, num_species)
+    full_states, experimental_design, num_train, assemblages, method, num_species)
   state_idxs_test = generate_state_idxs_test( 
     experimental_design, num_test, assemblages, num_species)
   results_table$num_test[index] = length(state_idxs_test)
@@ -1522,11 +1524,7 @@ perform_prediction_experiment_full <- function(
                               num_train=sample_size_seq_all,
                               num_test=num_test, 
                               abundance_mae_mean_test=NA,
-                              composition_balanced_accuracy_mean_test=NA,
-                              richness_mae_test=NA,
                               abundance_mae_mean_train=NA,
-                              richness_mae_train=NA,
-                              composition_balanced_accuracy_mean_train=NA,
                               num_losses_mean=NA,
                               abundance_q95_dataset=NA,
                               abundance_skewness_dataset=NA,
@@ -1534,6 +1532,10 @@ perform_prediction_experiment_full <- function(
                               abundance_final_skewness_mean=NA,
                               abundance_final_skewness_nonzero_mean=NA
   )
+  
+  # get full states
+  print("Getting full state grid")
+  full_states = get_full_state_grid(num_species)
 
   # Apply multi core parallelization
   indices = 1:nrow(results_table)
@@ -1541,7 +1543,7 @@ perform_prediction_experiment_full <- function(
     results_list = mclapply(indices, function(index) {
       perform_prediction_experiment_parallel_wrapper(
         directory_string, dataset_name, num_species, 
-        num_replicates_in_data, index, 
+        num_replicates_in_data, full_states, index, 
         assemblages, results_table)
     }, mc.cores = CORES, mc.preschedule = FALSE)
   }
@@ -1558,7 +1560,7 @@ perform_prediction_experiment_full <- function(
     results_list = lapply(indices, function(index) {
       perform_prediction_experiment_parallel_wrapper(
         directory_string, dataset_name, num_species, 
-        num_replicates_in_data, index, 
+        num_replicates_in_data, full_states, index, 
         assemblages, results_table)
     })
   }
