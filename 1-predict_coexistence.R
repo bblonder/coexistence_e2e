@@ -16,6 +16,37 @@ source('src/coexistence_love.R')
 
 
 ### MULTIPLE ENVIRONMENTS
+set.seed(1)
+data_fruit_flies = read.csv('data/fruit_flies/data_fruit_flies.csv') %>%
+  mutate(food.initial = factor(food.initial)) %>%
+  mutate(temperature.initial = factor(temperature.initial))
+
+data_fruit_flies[,1:28] = round(data_fruit_flies[,1:28]>0) # convert initial abundances to presence/absence
+
+# drop 7 lowest-abundance in outcome species
+species_lowest_abundance = data_fruit_flies %>% 
+  select(contains("outcome")) %>% 
+  colMeans %>% 
+  sort %>% 
+  head(7) %>%
+  names %>%
+  gsub("\\.outcome","",.)
+
+data_fruit_flies = data_fruit_flies %>%
+  select(!contains(species_lowest_abundance)) %>%
+  as.data.frame
+
+results = perform_prediction_experiment_full(
+  directory_string,
+  data_fruit_flies,
+  dataset_name = 'fruit_flies',
+  num_species = length(grep("outcome",names(data_fruit_flies))), # in full dataset, should be 28
+  method_list = c('rf','sequential_rf','naive'),
+  experimental_design_list = EXPERIMENTAL_DESIGNS,
+  num_replicates_in_data = 1) # in full dataset, this is maximum # of replicates, reflects the last 30 rows of the data file where there are varying abundances (which are ignored by this code run)
+
+
+
 
 set.seed(1)
 data_ciliates = read.csv('data/ciliates/data_ciliates.csv')
@@ -40,23 +71,6 @@ results = perform_prediction_experiment_full(
   experimental_design_list = EXPERIMENTAL_DESIGNS,
   num_replicates_in_data = 1)
 
-
-set.seed(1)
-data_fruit_flies = read.csv('data/fruit_flies/data_fruit_flies.csv') %>%
-  mutate(food.initial = factor(food.initial)) %>%
-  mutate(temperature.initial = factor(temperature.initial))
-
-data_fruit_flies[,1:28] = round(data_fruit_flies[,1:28]>0) # convert initial abundances to presence/absence
-
-
-results = perform_prediction_experiment_full(
-  directory_string,
-  data_fruit_flies,
-  dataset_name = 'fruit_flies',
-  num_species = 28, # should be 28
-  method_list = c('rf','sequential_rf','naive'),
-  experimental_design_list = EXPERIMENTAL_DESIGNS,
-  num_replicates_in_data = 30) # this is maximum # of replicates, reflects the last 30 rows of the data file where there are varying abundances (which are ignored by this code run)
 
 
 
