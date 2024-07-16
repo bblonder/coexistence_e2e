@@ -1,5 +1,0 @@
-"ACWR.action","FEMI.action","HOMU.action","PLER.action","SACO.action","URLI.action","treatment.initial","ACWR.outcome","FEMI.outcome","HOMU.outcome","PLER.outcome","SACO.outcome","URLI.outcome","state_idx"
-0,0,0,1,1,0,"wet",0,0,0,0,8614.48470697596,0,24
-0,0,0,0,0,1,"wet",0,0,0,0,0,8130.19921373607,32
-0,0,0,0,1,1,"dry",0,0,0,0,5072.11153581888,0,48
-0,0,0,1,1,1,"wet",0,0,0,0,8541.2176436367,177.445992113222,56

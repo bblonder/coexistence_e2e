@@ -1,8 +1,13 @@
-"name_nice","num_species_dataset","num_cases","num_combos","abundance_q95_dataset","num_na","empirical","possible_num_combos"
-"Annual plant",18,262144,262144,"  4321.1",0,FALSE,262144
-"Cedar Creek",18,154,132,"    50.2",0,TRUE,262144
-"Fly gut",5,1536,32,"537000.0",0,TRUE,32
-"Human gut",12,4096,4096,"     0.6",0,FALSE,4096
-"Mouse gut",11,2048,2048,"    13.3",256,FALSE,2048
-"Soil bacteria",8,570,101,"     0.1",0,TRUE,256
-"SORTIE-ND",9,1536,512,"   195.0",0,FALSE,512
+"name_nice","n_sp","n_env","n_env_levels","n_cases","n_combos","q_995","n_na","empirical","possible_num_combos"
+"Ciliates",6,1,6,690,53,"     0.2",0,TRUE,64
+"Fly gut",5,1,1,1536,32,"818000.0",0,TRUE,32
+"Forest trees",9,1,1,1536,512,"   307.0",0,FALSE,512
+"Fruit flies",28,2,4,1166,408,"     1.0",0,TRUE,268435456
+"Grassland
+annual plants",18,1,1,262144,262144," 34911.7",0,FALSE,262144
+"Grassland
+annual plants drought",6,1,2,128,64," 10079.5",0,FALSE,64
+"Human gut",12,1,1,4096,4096,"     0.8",0,FALSE,4096
+"Mouse gut",11,1,1,2048,2048,"    19.1",256,FALSE,2048
+"Prairie plants",18,1,1,154,132,"   163.3",0,TRUE,262144
+"Soil bacteria",8,1,1,570,101,"     0.1",0,TRUE,256

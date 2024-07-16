@@ -2,6 +2,8 @@ library(ggplot2)
 library(reshape)
 library(dplyr)
 library(ggpubr)
+library(data.table)
+library(stringr)
 
 source('utils/quantile_trim.R')
 
@@ -23,16 +25,17 @@ plot_data <- function(data,name,trim=TRUE)
   data_in = data %>%
     select(all_of(1:n_sp)) %>%
     mutate(row=1:nrow(.)) %>%
-    melt(id.vars=c('row'))
+    reshape::melt(id.vars=c('row'))
   
   data_out = data %>%
     select(contains("outcome")) %>%
     mutate(row=1:nrow(.)) %>%
-    melt(id.vars=c('row'))
+    reshape::melt(id.vars=c('row'))
   
-  g_in = ggplot(data_in, aes(x=variable,y=row,fill=factor(value))) + 
+  g_in = ggplot(data_in, aes(x=variable,y=row,fill=value)) + 
     geom_raster() +
-    scale_fill_manual(values=c('white','orange'),labels=c('Absent','Present'),name='Experimental\naction') +
+    scale_fill_gradient(name='Experimental\naction',low='white',high='orange',na.value='red') +
+    #scale_fill_manual(values=c('white','orange'),labels=c('Absent','Present'),name='Experimental\naction') +
     theme_bw() +
     xlab('Species') +
     ylab('Experiment') +
@@ -54,23 +57,36 @@ plot_data <- function(data,name,trim=TRUE)
 
 try(dir.create('outputs/figures'))
 
-data_assemblages_cedar_creek_18 = read.csv('data/cedar_creek/cedar_creek_2018.csv')
-g_cedar_creek = plot_data(data_assemblages_cedar_creek_18,'Cedar Creek')
 
-data_sortie_9_3 = read.csv('data/sortie/data_sortie.csv')
-g_sortie = plot_data(data_sortie_9_3,'SORTIE')
 
-data_assemblages_H_12 = read.csv('data/glv/assemblages_H_12.csv')
-g_human_gut = plot_data(data_assemblages_H_12,'Human gut')
+fn_outputs = dir('outputs/statistical',pattern="result.*\\.csv",full.names = TRUE)
 
-data_assemblages_M_11 = read.csv('data/glv/assemblages_M_11.csv')
-g_mouse_gut = plot_data(data_assemblages_M_11,'Mouse gut')
+df_all_raw = rbindlist(lapply(1:length(fn_outputs), function(i)
+{
+  df_this = read.csv(fn_outputs[i])
+  
+  name_this = gsub("\\.csv","",gsub("results_","",basename(fn_outputs[i])))
+  
+  df_this$name = name_this
+  
+  return(df_this)
+}))
 
-data_annual_plant_18 = read.csv('data/annual_plant/assemblages_annual_plant_18.csv')
-g_annual_plant = plot_data(data_annual_plant_18,'Annual plant')
+truncate_name <- function(fn) {gsub('\\.csv','',gsub('outputs/statistical/results_','',fn))}
 
-data_fly_5 = read.csv('data/fly/data_fly.csv')
-g_fly = plot_data(data_fly_5,'Fly gut')
+names_nice = truncate_name(fn_outputs)
+names_nice_orig = names_nice
+names_nice = str_to_sentence(gsub("_"," ",names_nice))
+names_nice = gsub("Grassland ","Grassland\n",names_nice)
+names(names_nice) = names_nice_orig
 
-data_soil_bacteria_8 = read.csv('data/friedman_gore/data_friedman_gore.csv')
-g_soil_bacteria = plot_data(data_soil_bacteria_8,'Soil bacteria')
+fns = sprintf('data/%s/data_%s.csv',names(names_nice),names(names_nice))
+fns = gsub('data/human_gut','data/human_and_mouse_gut',fns)
+fns = gsub('data/mouse_gut','data/human_and_mouse_gut',fns)
+names(fns) = names_nice
+
+lapply(1:length(fns), function(i) {
+  print(i)
+  data_this = read.csv(fns[i])
+  g_this = plot_data(data_this,names(fns)[i])
+  })
