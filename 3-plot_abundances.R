@@ -4,6 +4,7 @@ library(dplyr)
 library(ggpubr)
 library(data.table)
 library(stringr)
+library(tibble)
 
 source('utils/quantile_trim.R')
 
@@ -23,13 +24,15 @@ plot_data <- function(data,name,trim=TRUE)
   # plot abundance structure
 
   data_in = data %>%
-    select(all_of(1:n_sp)) %>%
+    select(contains("action")) %>%
     mutate(row=1:nrow(.)) %>%
+    as.data.frame %>% 
     reshape::melt(id.vars=c('row'))
   
   data_out = data %>%
     select(contains("outcome")) %>%
     mutate(row=1:nrow(.)) %>%
+    as.data.frame %>% 
     reshape::melt(id.vars=c('row'))
   
   g_in = ggplot(data_in, aes(x=variable,y=row,fill=value)) + 
@@ -52,7 +55,7 @@ plot_data <- function(data,name,trim=TRUE)
     theme(axis.text.x=element_blank()) +
     scale_y_continuous(expand=c(0,0),breaks=range(data_in$row))
   
-  ggsave(ggarrange(g_in, g_out,nrow=1,ncol=2,align='hv'),file=sprintf('outputs/figures/g_experiment_%s.png',name),width=6,height=6)
+  return(list(g_in, g_out))
 }
 
 try(dir.create('outputs/figures'))
@@ -87,6 +90,35 @@ names(fns) = names_nice
 
 lapply(1:length(fns), function(i) {
   print(i)
-  data_this = read.csv(fns[i])
-  g_this = plot_data(data_this,names(fns)[i])
+  data_this_raw = read.csv(fns[i])
+    
+  data_this = data_this_raw %>% 
+    select(contains("initial"))
+  
+  # make name pairs
+  names_to_insert = names(data_this)
+  data_this = cbind(matrix(gsub("\\.initial","",names_to_insert),nrow=nrow(data_this),ncol=length(names_to_insert),byrow=TRUE),
+                    data_this)
+  data_this = data_this[,c(seq(1,ncol(data_this),by=2),seq(1,ncol(data_this),by=2)+1)]
+  environment = apply(data_this, 1, paste, collapse=" ")
+  # now reset without the extra columns
+  data_this = data_this_raw %>% 
+    mutate(environment = environment)
+  
+  print(table(data_this$environment))
+  
+  data_this_by_env = data_this %>% 
+    group_by(environment) %>%
+    group_split
+  
+  plots_this = lapply(1:length(data_this_by_env), function(j) {
+    name_final_this = ifelse(length(unique(data_this$environment)) > 1,
+                             paste(names(fns)[i],data_this_by_env[[j]]$environment[1],sep="\n"),
+                             names(fns)[i])
+    plots_this_env = plot_data(data_this_by_env[[j]] %>% select(-environment), name_final_this)
+    return(ggarrange(plotlist=plots_this_env,nrow=1,ncol=2,align='hv'))
+  })
+  
+  ggsave(ggarrange(plotlist=plots_this,ncol=1),
+         file=sprintf('outputs/figures/g_experiment_%s.png',names(fns)[i]),width=6,height=4*length(data_this_by_env))
   })
