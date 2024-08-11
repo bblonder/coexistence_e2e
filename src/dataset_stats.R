@@ -26,7 +26,7 @@ get_dataset_stats <- function(fn)
     nrow
   
   n_combos = data %>%
-    select(contains('action')) %>%
+    select(contains(c('action','initial'))) %>%
     unique %>% 
     nrow
   

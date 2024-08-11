@@ -36,7 +36,7 @@ plot_data <- function(data,name,trim=TRUE)
     reshape::melt(id.vars=c('row'))
   
   g_in = ggplot(data_in, aes(x=variable,y=row,fill=value)) + 
-    geom_raster() +
+    geom_tile() +
     scale_fill_gradient(name='Experimental\naction',low='white',high='orange',na.value='red') +
     #scale_fill_manual(values=c('white','orange'),labels=c('Absent','Present'),name='Experimental\naction') +
     theme_bw() +
@@ -47,7 +47,7 @@ plot_data <- function(data,name,trim=TRUE)
     scale_y_continuous(expand=c(0,0),breaks=range(data_in$row))
   
   g_out = ggplot(data_out, aes(x=variable,y=row,fill=value)) + 
-    geom_raster() +
+    geom_tile() +
     scale_fill_gradient(name='Outcome\nabundance',low='white',high='blueviolet',na.value='red') +
     theme_bw() +
     xlab('Species') +
@@ -121,4 +121,48 @@ lapply(1:length(fns), function(i) {
   
   ggsave(ggarrange(plotlist=plots_this,ncol=1),
          file=sprintf('outputs/figures/g_experiment_%s.png',names(fns)[i]),width=6,height=4*length(data_this_by_env))
+  ggsave(ggarrange(plotlist=plots_this,ncol=1),
+         file=sprintf('outputs/figures/g_experiment_%s.pdf',names(fns)[i]),width=6,height=4*length(data_this_by_env))
   })
+
+
+
+
+# also plot abundances
+plot_abundance_histograms <- function(data, name)
+{
+  d1 = data %>% 
+    select(contains("outcome")) %>%
+    as.matrix %>%
+    as.numeric %>%
+    log10
+  d2 = quantile_max_trim(data) %>% 
+    select(contains("outcome")) %>%
+    as.matrix %>%
+    as.numeric %>%
+    log10
+  
+  df = data.frame(abundance=d1,name='raw') %>%
+    rbind(data.frame(abundance=d2,name='trimmed'))
+  
+  ggplot(df, aes(x=abundance)) +
+    geom_histogram() +
+    facet_wrap(~name,scales='free') +
+    theme_bw() +
+    xlab("Log10 Outcome abundance") +
+    ylab("Count") +
+    ggtitle(name)
+}
+
+plots_abundance = lapply(1:length(names_nice), function(i) {
+  plot_abundance_histograms(read.csv(fns[i]),names_nice[i])
+  })
+
+plot_abundance_arranged = ggarrange(plotlist=plots_abundance,labels='auto')
+
+ggsave(plot_abundance_arranged, 
+       file='outputs/figures/g_plots_abundance.pdf',
+       width=13,height=8)
+ggsave(plot_abundance_arranged, 
+       file='outputs/figures/g_plots_abundance.png',
+       width=13,height=8)
