@@ -145,6 +145,8 @@ results = perform_prediction_experiment_full(
   num_replicates_in_data = 3)
 
 
+# this does not run on my cluster - too much memory to run in parallel. had to put on HPC. 
+# run carefully on a local machine or reduce # of cores in src/configs.R ...
 set.seed(1)
 data_grassland_annual_plants = read.csv('data/grassland_annual_plants/data_grassland_annual_plants.csv')
 if (DEBUG_MODE==TRUE) {
