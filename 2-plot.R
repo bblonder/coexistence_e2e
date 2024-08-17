@@ -1357,13 +1357,14 @@ tab_model(m_specificity_shannons_h,file='outputs/figures/model_stats_prioritizat
 
 # get summary stats for abstract
 df_all %>% 
-  filter(num_train==89) %>% 
-  summarize(scaled.error.median=median(abundance_mae_mean_test_scaled_clipped, na.rm=TRUE))
+  filter(num_train==89 & method=='rf' & experimental_design=='mixed') %>% 
+  group_by(name) %>%
+  summarize(scaled.error.mean=mean(abundance_mae_mean_test_scaled_clipped, na.rm=TRUE))
 
 rbind(df_prioritization_stats_shannons_h, df_prioritization_stats_abundance, df_prioritization_stats_removal, fill=TRUE) %>% 
   filter(num_train==89) %>% 
   group_by(problem) %>%
-  summarize(true.pos.median=median(Sensitivity, na.rm=TRUE), true.neg.median=median(Specificity, na.rm=TRUE)) 
+  summarize(true.pos.mean=mean(Sensitivity, na.rm=TRUE), true.neg.mean=mean(Specificity, na.rm=TRUE)) 
 
 # get summary stats for results
 df_all %>%
@@ -1387,3 +1388,17 @@ df_all %>%
   filter(method == 'rf' & experimental_design=='mixed') %>%
   filter(num_train==89) %>% 
   reframe(100*mean(abundance_mae_mean_test_scaled_clipped,na.rm=TRUE))
+
+rbind(df_prioritization_stats_shannons_h, df_prioritization_stats_abundance, df_prioritization_stats_removal, fill=TRUE) %>% 
+  filter(num_train==89) %>% 
+  group_by(problem, name) %>%
+  filter(problem=='shannons_h') %>%
+  summarize(true.pos.mean=mean(Sensitivity, na.rm=TRUE), true.neg.mean=mean(Specificity, na.rm=TRUE)) 
+
+rbind(df_prioritization_stats_shannons_h, df_prioritization_stats_abundance, df_prioritization_stats_removal, fill=TRUE) %>% 
+  filter(num_train==89) %>% 
+  group_by(problem, name) %>%
+  filter(problem=='abundance') %>%
+  summarize(true.pos.mean=mean(Sensitivity, na.rm=TRUE), true.neg.mean=mean(Specificity, na.rm=TRUE)) 
+
+
