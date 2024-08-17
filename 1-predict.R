@@ -162,19 +162,3 @@ results = perform_prediction_experiment_full(
   num_replicates_in_data = 1)
 
 
-
-
-
-
-# %>%
-#   select(contains(c("Quad","Rob","Bir","Pallid","PerO","Imm","Gau","food.initial","temperature.initial"))) %>%
-#   select(contains("action"),contains("initial"),contains("outcome"))
-
-
-# data_fruit_flies = data_fruit_flies %>%
-#   mutate(conditions = .[,1:9] %>% apply(1,paste,collapse=".")) %>%
-#   group_by(conditions) %>%
-#   slice_head(n=1) %>%
-#   ungroup %>%
-#   select(-conditions) %>%
-#   as.data.frame #

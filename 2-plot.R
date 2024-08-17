@@ -224,7 +224,7 @@ ggsave(g_abundance_mae,
 ### explanations
 df_all_for_regression_dataset = df_all %>%
   filter(method=='rf' & num_train %in% c(21,89,264)) %>%
-  mutate(type = factor(empirical,levels=c(FALSE,TRUE),labels = c('Simulated','Empirical'))) %>%
+  #mutate(type = factor(empirical,levels=c(FALSE,TRUE),labels = c('Simulated','Empirical'))) %>%
   mutate(deterministic = factor(deterministic,levels=c(FALSE,TRUE),labels = c('Stochastic','Deterministic'))) %>%
   mutate(n_sp = replace(n_sp, n_sp==28, 21)) # to account for the dropped species in 'fly gut'
 
@@ -353,16 +353,14 @@ make_obs_pred_abundance_df <- function(cases, num_train, method_this='rf',experi
 
 
 # these are for the prioritization
-warning('grassland_annual_plants does not work because the files_obs dont exist on the outputs... why??')
 
 cases_all = dataset_stats_all %>% 
-  select(fn, name) %>%
-  filter(name!='grassland_annual_plants')
+  select(fn, name)
 
 # restrict to cases that have the complete set of actions
 cases_complete = dataset_stats_all %>% 
   select(fn, name) %>%
-  filter(name %in% c('human_gut','mouse_gut','forest_trees', 'grassland_annual_plants_drought', 'fly_gut')) # only do the complete datasets
+  filter(name %in% c('human_gut','mouse_gut','forest_trees', 'grassland_annual_plants', 'grassland_annual_plants_drought', 'fly_gut')) # only do the complete datasets
 
 df_obs_pred = rbind(
   make_obs_pred_abundance_df(cases=cases_all, num_train=21, method_this='rf', experimental_design_this='mixed'),
@@ -407,6 +405,8 @@ plots_scatter = df_obs_pred_augmented %>% group_by(name) %>%
       geom_line(stat="smooth",method = "lm", se=FALSE,alpha=0.5,linewidth=0.75, mapping=aes(group=paste(variable, rep))) +
       geom_point(alpha=0.5) +
       theme_bw() +
+      scale_x_sqrt() + 
+      scale_y_sqrt() + 
       geom_abline(slope=1,linewidth=2,alpha=0.5) +
       scale_color_hue(l=50,h=c(10,350)) +
       facet_wrap(~num_train,ncol=3,nrow=1) +
@@ -415,7 +415,8 @@ plots_scatter = df_obs_pred_augmented %>% group_by(name) %>%
       ylab('Abundance (observed)') +
       theme(legend.text=element_text(size=6)) +
       theme(legend.key.size = unit(3, "mm")) +
-      ggtitle(names_nice[df_ss$name[1] ])
+      ggtitle(names_nice[df_ss$name[1] ]) +
+      theme(axis.text.x = element_text(size = 6), axis.text.y = element_text(size = 6))
   })
 
 g_obs_pred = ggarrange(plotlist=plots_scatter,labels='auto',ncol=2,nrow=5,align='hv')
@@ -717,7 +718,8 @@ g_unwanted_all = ggplot(rbind(df_summary_removal_21, df_summary_removal_89, df_s
   xlab("Number of training cases") + ylab("Value (train + test)") +
   scale_color_manual(values=palette_11,name='Dataset') +
   theme(legend.position='bottom') +
-  geom_smooth(method='lm')
+  geom_smooth(method='lm') +
+  scale_y_sqrt()
 
 
 get_classification_stats <- function(predictions_best, num_train)
@@ -764,7 +766,8 @@ plot_best_experiments_classification_statistics <- function(predictions_best_lis
     xlab("Number of training cases") +
     ylab("Value (train + test)") +
     scale_color_manual(values=palette_11,name='Dataset') +
-    ggtitle(title)
+    ggtitle(title) +
+    scale_y_sqrt()
 }
 
 
@@ -983,7 +986,8 @@ plot_best_experiments_new <- function(predictions_list, num_experiments_max=500)
           scale_fill_gradientn(colors=brewer.pal(9,"YlGnBu"),
                                name='Outcome abundance',trans='sqrt',
                                labels=function(x) sprintf("%.1f", x),
-                               na.value = 'lightgray')
+                               na.value = 'lightgray',
+                               breaks = \(x) c(x[1],x[2]/4,x[2]))
       }
       
       return(g)
@@ -1281,21 +1285,21 @@ best_predictions_pca_all <- function(predictions_raw, is_removal=FALSE)
 g_best_hexbin_shannons_H_21 = best_predictions_pca_all(best_case_shannons_h_21)
 g_best_hexbin_shannons_H_89 = best_predictions_pca_all(best_case_shannons_h_89)
 g_best_hexbin_shannons_H_264 = best_predictions_pca_all(best_case_shannons_h_264)
-ggsave(ggarrange(g_best_hexbin_shannons_H_21, g_best_hexbin_shannons_H_89, g_best_hexbin_shannons_H_264,labels='auto', nrow=1,ncol=3), file='outputs/figures/g_best_hexbin_shannons_H.pdf',width=15,height=10)
-ggsave(ggarrange(g_best_hexbin_shannons_H_21, g_best_hexbin_shannons_H_89, g_best_hexbin_shannons_H_264,labels='auto', nrow=1,ncol=3), file='outputs/figures/g_best_hexbin_shannons_H.png',width=15,height=10)
+ggsave(ggarrange(g_best_hexbin_shannons_H_21, g_best_hexbin_shannons_H_89, g_best_hexbin_shannons_H_264,labels='auto', nrow=1,ncol=3), file='outputs/figures/g_best_hexbin_shannons_H.pdf',width=18,height=12)
+ggsave(ggarrange(g_best_hexbin_shannons_H_21, g_best_hexbin_shannons_H_89, g_best_hexbin_shannons_H_264,labels='auto', nrow=1,ncol=3), file='outputs/figures/g_best_hexbin_shannons_H.png',width=18,height=12)
 
 
 g_best_hexbin_total_abundance_21 = best_predictions_pca_all(best_case_total_abundance_21)
 g_best_hexbin_total_abundance_89 = best_predictions_pca_all(best_case_total_abundance_89)
 g_best_hexbin_total_abundance_264 = best_predictions_pca_all(best_case_total_abundance_264)
-ggsave(ggarrange(g_best_hexbin_total_abundance_21, g_best_hexbin_total_abundance_89, g_best_hexbin_total_abundance_264,labels='auto', nrow=1,ncol=3), file='outputs/figures/g_best_hexbin_total_abundance.pdf',width=15,height=10)
-ggsave(ggarrange(g_best_hexbin_total_abundance_21, g_best_hexbin_total_abundance_89, g_best_hexbin_total_abundance_264,labels='auto', nrow=1,ncol=3), file='outputs/figures/g_best_hexbin_total_abundance.png',width=15,height=10)
+ggsave(ggarrange(g_best_hexbin_total_abundance_21, g_best_hexbin_total_abundance_89, g_best_hexbin_total_abundance_264,labels='auto', nrow=1,ncol=3), file='outputs/figures/g_best_hexbin_total_abundance.pdf',width=18,height=12)
+ggsave(ggarrange(g_best_hexbin_total_abundance_21, g_best_hexbin_total_abundance_89, g_best_hexbin_total_abundance_264,labels='auto', nrow=1,ncol=3), file='outputs/figures/g_best_hexbin_total_abundance.png',width=18,height=12)
 
 g_best_hexbin_removals_21 = best_predictions_pca_all(best_case_removals_21, is_removal = TRUE)
 g_best_hexbin_removals_89 = best_predictions_pca_all(best_case_removals_89, is_removal = TRUE)
 g_best_hexbin_removals_264 = best_predictions_pca_all(best_case_removals_264, is_removal = TRUE)
-ggsave(ggarrange(g_best_hexbin_removals_21, g_best_hexbin_removals_89, g_best_hexbin_removals_264,labels='auto', nrow=1,ncol=3), file='outputs/figures/g_best_hexbin_removal.pdf',width=15,height=10)
-ggsave(ggarrange(g_best_hexbin_removals_21, g_best_hexbin_removals_89, g_best_hexbin_removals_264,labels='auto', nrow=1,ncol=3), file='outputs/figures/g_best_hexbin_removal.png',width=15,height=10)
+ggsave(ggarrange(g_best_hexbin_removals_21, g_best_hexbin_removals_89, g_best_hexbin_removals_264,labels='auto', nrow=1,ncol=3), file='outputs/figures/g_best_hexbin_removal.pdf',width=18,height=12)
+ggsave(ggarrange(g_best_hexbin_removals_21, g_best_hexbin_removals_89, g_best_hexbin_removals_264,labels='auto', nrow=1,ncol=3), file='outputs/figures/g_best_hexbin_removal.png',width=18,height=12)
 
 
 
@@ -1344,3 +1348,42 @@ write.csv(df_all, file='outputs/figures/df_prediction_all.csv', row.names = FALS
 write.csv(df_prioritization_stats_abundance, file='outputs/figures/df_prioritization_abundance.csv', row.names = FALSE)
 write.csv(df_prioritization_stats_shannons_h, file='outputs/figures/df_prioritization_shannons_h.csv', row.names = FALSE)
 write.csv(df_prioritization_stats_removal, file='outputs/figures/df_prioritization_removal.csv', row.names = FALSE)
+
+# write out model stats
+tab_model(m_dataset_properties,file='outputs/figures/model_stats_prediction_scaled_error.html', auto.label=FALSE, title='Prediction (scaled abundance error)')        
+tab_model(m_specificity_abundance,file='outputs/figures/model_stats_prioritization_total_abundance.html', auto.label=FALSE, title='Prioritization of maximizing total abundance (true negative rate)')   
+tab_model(m_specificity_removal,file='outputs/figures/model_stats_prioritization_removal.html', auto.label=FALSE, title='Prioritization of species removal (true negative rate)')   
+tab_model(m_specificity_shannons_h,file='outputs/figures/model_stats_prioritization_shannons_h.html', auto.label=FALSE, title='Prioritization of maximizing Shannon\'s H (true negative rate)')   
+
+# get summary stats for abstract
+df_all %>% 
+  filter(num_train==89) %>% 
+  summarize(scaled.error.median=median(abundance_mae_mean_test_scaled_clipped, na.rm=TRUE))
+
+rbind(df_prioritization_stats_shannons_h, df_prioritization_stats_abundance, df_prioritization_stats_removal, fill=TRUE) %>% 
+  filter(num_train==89) %>% 
+  group_by(problem) %>%
+  summarize(true.pos.median=median(Sensitivity, na.rm=TRUE), true.neg.median=median(Specificity, na.rm=TRUE)) 
+
+# get summary stats for results
+df_all %>%
+  filter(method=='naive') %>%
+  reframe(100*mean(abundance_mae_mean_test_scaled_clipped))
+
+df_all %>%
+  filter(method=='glv') %>%
+  reframe(100*mean(abundance_mae_mean_test_scaled_clipped,na.rm=TRUE))
+
+df_all %>%
+  filter(method %in% c('rf','sequential_rf')) %>%
+  reframe(100*mean(abundance_mae_mean_test_scaled_clipped,na.rm=TRUE))
+
+df_all %>%
+  filter(method == 'rf') %>%
+  filter(num_train==89) %>% 
+  reframe(100*mean(abundance_mae_mean_test_scaled_clipped,na.rm=TRUE))
+
+df_all %>%
+  filter(method == 'rf' & experimental_design=='mixed') %>%
+  filter(num_train==89) %>% 
+  reframe(100*mean(abundance_mae_mean_test_scaled_clipped,na.rm=TRUE))
