@@ -9,8 +9,10 @@ try(dir.create(file.path(getwd(), 'outputs/statistical'), recursive = TRUE))
 directory_string = file.path(getwd(), 'outputs/statistical')
 
 
-results_all = read.csv('outputs/statistical/cross_validation.csv') %>%
-  mutate(name_nice=str_to_sentence(gsub("_", " ", results_all$name))) %>%
+results_all = read.csv('outputs/statistical/cross_validation.csv')
+
+results_all = results_all %>%
+  mutate(name_nice=str_to_sentence(gsub("_", " ", name))) %>%
   mutate(name_nice = gsub("Grassland annual","Grassland annual\n",name_nice)) %>%
   mutate(test_mode_nice = gsub(" environments","",gsub("_"," ",gsub("mae_test_","",test_mode))))
 
@@ -30,3 +32,4 @@ g_cross_validation = ggplot(results_all, aes(x=num_train_cases,y=value_scaled,co
   scale_color_brewer(name='Test environments',palette='Set1')
 
 ggsave(g_cross_validation, file='outputs/figures/g_cross_validation.png',width=8,height=4.5)
+ggsave(g_cross_validation, file='outputs/figures/g_cross_validation.pdf',width=8,height=4.5)
